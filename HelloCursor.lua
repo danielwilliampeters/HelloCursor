@@ -25,7 +25,7 @@ local DEFAULTS = {
   showWorld = true,
   showPvE = true,           -- dungeons / delves / raids
   showPvP = true,           -- battlegrounds / arena
-  showInCombat = false,     -- override: show anywhere while in combat
+  showInCombat = true,     -- override: show anywhere while in combat
 
   -- Behaviour
   reactiveCursor = true,    -- crossfade to small ring while mouselooking
@@ -510,7 +510,7 @@ local function CreateSettingsPanel()
   )
 
   cbCombatRef = MakeCheckbox(
-    "Show in combat (override)",
+    "Show in combat",
     function() return HelloCursorDB.showInCombat end,
     function(v) HelloCursorDB.showInCombat = v end,
     cbPvPRef,
