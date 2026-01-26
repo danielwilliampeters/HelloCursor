@@ -24,7 +24,7 @@ local DEFAULTS = {
   showPvP = true,       -- battlegrounds / arena
   showInCombat = false, -- override: show anywhere while in combat
 
-  reactiveCursor = false, -- shrink on RMB (mouselook) with texture swap
+  reactiveCursor = true, -- shrink on RMB (mouselook) with texture swap
 }
 
 local REACTIVE_SHRINK_SCALE = 0.5
@@ -247,6 +247,21 @@ end)
 
 local hexEditBox -- assigned in settings UI
 
+-- UI refs so we can refresh without closing the panel
+local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
+
+local function RefreshOptionsUI()
+  if cbWorldRef then cbWorldRef:SetChecked(HelloCursorDB.showWorld and true or false) end
+  if cbPvERef then cbPvERef:SetChecked(HelloCursorDB.showPvE and true or false) end
+  if cbPvPRef then cbPvPRef:SetChecked(HelloCursorDB.showPvP and true or false) end
+  if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
+  if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
+
+  if hexEditBox then
+    hexEditBox:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+  end
+end
+
 local function GetPickerWidget()
   if not ColorPickerFrame then return nil end
   if ColorPickerFrame.GetColorRGB and ColorPickerFrame.SetColorRGB then
@@ -309,21 +324,16 @@ end
 -- --------------------------
 
 local function ResetToDefaults()
-  -- Overwrite values (keep table identity)
   for k, v in pairs(DEFAULTS) do
     HelloCursorDB[k] = v
   end
 
-  -- Normalize + clamp
   HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
   HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
   RefreshVisualsImmediate()
   UpdateVisibility()
-
-  if hexEditBox then
-    hexEditBox:SetText(HelloCursorDB.colorHex)
-  end
+  RefreshOptionsUI() -- ✅ instant UI update
 end
 
 -- --------------------------
@@ -362,7 +372,7 @@ local function CreateSettingsPanel()
     return cb
   end
 
-  local cbWorld = MakeCheckbox(
+  cbWorldRef = MakeCheckbox(
     "Show in world",
     function() return HelloCursorDB.showWorld end,
     function(v) HelloCursorDB.showWorld = v end,
@@ -370,44 +380,42 @@ local function CreateSettingsPanel()
     -20
   )
 
-  local cbPvE = MakeCheckbox(
+  cbPvERef = MakeCheckbox(
     "Show in dungeons / delves / raids",
     function() return HelloCursorDB.showPvE end,
     function(v) HelloCursorDB.showPvE = v end,
-    cbWorld,
+    cbWorldRef,
     -12
   )
 
-  local cbPvP = MakeCheckbox(
+  cbPvPRef = MakeCheckbox(
     "Show in battlegrounds / arena",
     function() return HelloCursorDB.showPvP end,
     function(v) HelloCursorDB.showPvP = v end,
-    cbPvE,
+    cbPvERef,
     -12
   )
 
-  local cbCombat = MakeCheckbox(
+  cbCombatRef = MakeCheckbox(
     "Show in combat (override)",
     function() return HelloCursorDB.showInCombat end,
     function(v) HelloCursorDB.showInCombat = v end,
-    cbPvP,
+    cbPvPRef,
     -12
   )
 
-  local cbReactive = MakeCheckbox(
+  cbReactiveRef = MakeCheckbox(
     "Reactive cursor (shrink while holding RMB)",
     function() return HelloCursorDB.reactiveCursor end,
     function(v) HelloCursorDB.reactiveCursor = v end,
-    cbCombat,
+    cbCombatRef,
     -12,
-    function()
-      RefreshVisualsImmediate()
-    end
+    function() RefreshVisualsImmediate() end
   )
 
   -- Colour section
   local colorLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  colorLabel:SetPoint("TOPLEFT", cbReactive, "BOTTOMLEFT", 0, -18)
+  colorLabel:SetPoint("TOPLEFT", cbReactiveRef, "BOTTOMLEFT", 0, -18)
   colorLabel:SetText("Ring colour")
 
   local pickBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -454,9 +462,7 @@ local function CreateSettingsPanel()
   defaultsBtn:SetSize(140, 22)
   defaultsBtn:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -14)
   defaultsBtn:SetText("Reset to defaults")
-  defaultsBtn:SetScript("OnClick", function()
-    ResetToDefaults()
-  end)
+  defaultsBtn:SetScript("OnClick", ResetToDefaults)
 
   local category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
   Settings.RegisterAddOnCategory(category)
