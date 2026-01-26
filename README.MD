@@ -8,21 +8,18 @@ Designed for Retail with performance, polish, and configurability in mind.
 
 - **Highly visible cursor ring**: Adds a hollow ring around your cursor so it never gets lost in combat
 - **Colour customisation**: Choose any colour using the built-in colour picker or manual hex input
+- **Class colour option**: Automatically tint the ring using your character’s class colour
 - **Reactive cursor mode**: Smoothly shrinks the ring when holding right mouse (mouselook)
 - **Freeze on mouselook**: Ring stays at the last cursor position when camera movement begins
 - **Zone-aware visibility**: Configure visibility separately for world, PvE, and PvP
-- **Combat override**: Option to force the ring to show anywhere while in combat
+- **Show in combat**: Display the ring whenever you are in combat (enabled by default)
 - **Polished animation**: Subtle 0.08s size tween for smooth transitions
 - **Defaults reset**: Restore all settings with a single click
-- **Lightweight**: Extremely low performance impact (single frame, single texture)
+- **Lightweight**: Extremely low performance impact (single frame, asset-based rendering)
 - **Slash commands**: Quick access to settings via `/hc` or `/hellocursor`
 
 ## Installation
 
 1. Download the addon
 2. Extract the `HelloCursor` folder to your `World of Warcraft\_retail_\Interface\AddOns\` directory
-3. Ensure the folder contains:
-
-## License
-
-Free to use and modify.
+3. Restart World of Warcraft or reload your UI with `/reload`
