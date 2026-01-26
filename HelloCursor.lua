@@ -5,6 +5,7 @@
 -- Added: 0.08s tween for crossfade shrink/return.
 -- Added: Color picker + hex input for ring colour (Retail-safe).
 -- Added: Defaults button to reset settings.
+-- Added: Option to use player CLASS COLOUR (ignores hex).
 --
 -- REQUIRED FILES:
 --   Interface/AddOns/HelloCursor/ring.tga
@@ -17,6 +18,7 @@ local ADDON_NAME = ...
 local DEFAULTS = {
   enabled = true,
   colorHex = "FF4FD8", -- default PINK (RRGGBB or AARRGGBB)
+  useClassColor = false, -- NEW: tint ring to player class colour
   size = 72,
 
   showWorld = true,
@@ -112,8 +114,8 @@ ringTexNormal:SetAllPoints(true)
 local ringTexSmall = ringFrame:CreateTexture(nil, "OVERLAY")
 ringTexSmall:SetAllPoints(true)
 
-local TEX_NORMAL = "Interface\\AddOns\\HelloCursor\\ring_glow.tga"
-local TEX_SMALL  = "Interface\\AddOns\\HelloCursor\\ring_small_glow.tga"
+local TEX_NORMAL = "Interface\\AddOns\\HelloCursor\\ring.tga"
+local TEX_SMALL  = "Interface\\AddOns\\HelloCursor\\ring_small.tga"
 
 local function SafeSetTexture(tex, path, fallback)
   local ok = tex:SetTexture(path)
@@ -174,8 +176,48 @@ local function SetMix(mix)
   ringTexSmall:SetAlpha(mix)
 end
 
+-- ---- Class colour helpers ----
+
+local function GetPlayerClassRGB()
+  local _, classFile = UnitClass("player")
+  classFile = classFile or "PRIEST"
+
+  -- Preferred: ColorMixin (Retail)
+  if C_ClassColor and C_ClassColor.GetClassColor then
+    local c = C_ClassColor.GetClassColor(classFile)
+    if c and c.GetRGB then
+      local r, g, b = c:GetRGB()
+      return r, g, b
+    elseif c and c.r then
+      return c.r, c.g, c.b
+    end
+  end
+
+  -- Fallback: RAID_CLASS_COLORS
+  if RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
+    local c = RAID_CLASS_COLORS[classFile]
+    return c.r, c.g, c.b
+  end
+
+  -- Final fallback: FrameXML helper
+  if GetClassColor then
+    local r, g, b = GetClassColor(classFile)
+    return r, g, b
+  end
+
+  return 1, 1, 1
+end
+
+local function GetRingRGBA()
+  if HelloCursorDB.useClassColor then
+    local r, g, b = GetPlayerClassRGB()
+    return r, g, b, 1
+  end
+  return HexToRGBA(HelloCursorDB.colorHex)
+end
+
 local function ApplyTint()
-  local r, g, b, a = HexToRGBA(HelloCursorDB.colorHex)
+  local r, g, b, a = GetRingRGBA()
   ringTexNormal:SetVertexColor(r, g, b, a)
   ringTexSmall:SetVertexColor(r, g, b, a)
 end
@@ -238,7 +280,7 @@ ringFrame:SetScript("OnUpdate", function()
     local t = (GetTime() - tweenStart) / TWEEN_DURATION
     if t >= 1 then
       StopTween()
-      SetMix(tweenTo) -- snaps + hides the other texture
+      SetMix(tweenTo)
     else
       SetMix(Lerp(tweenFrom, tweenTo, EaseInOut(t)))
     end
@@ -246,7 +288,6 @@ ringFrame:SetScript("OnUpdate", function()
     if math.abs(currentMix - targetMix) > 0.001 then
       StartTween(currentMix, targetMix)
     else
-      -- Ensure we're cleanly snapped (one visible) at rest
       SetMix(targetMix)
     end
   end
@@ -259,9 +300,22 @@ end)
 -- --------------------------
 
 local hexEditBox -- assigned in settings UI
+local pickBtnRef -- assigned in settings UI (so we can enable/disable)
+local cbClassRef -- assigned in settings UI
 
 -- UI refs so we can refresh without closing the panel
 local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
+
+local function RefreshColourUIEnabledState()
+  local enabled = not HelloCursorDB.useClassColor
+  if pickBtnRef then
+    pickBtnRef:SetEnabled(enabled)
+  end
+  if hexEditBox then
+    hexEditBox:SetEnabled(enabled)
+    hexEditBox:SetAlpha(enabled and 1 or 0.5)
+  end
+end
 
 local function RefreshOptionsUI()
   if cbWorldRef then cbWorldRef:SetChecked(HelloCursorDB.showWorld and true or false) end
@@ -269,10 +323,13 @@ local function RefreshOptionsUI()
   if cbPvPRef then cbPvPRef:SetChecked(HelloCursorDB.showPvP and true or false) end
   if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
   if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
+  if cbClassRef then cbClassRef:SetChecked(HelloCursorDB.useClassColor and true or false) end
 
   if hexEditBox then
     hexEditBox:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
   end
+
+  RefreshColourUIEnabledState()
 end
 
 local function GetPickerWidget()
@@ -299,6 +356,8 @@ local function SetColorHex(hex)
 end
 
 local function OpenColorPicker()
+  if HelloCursorDB.useClassColor then return end
+
   local picker = GetPickerWidget()
   if not picker then
     print("HelloCursor: Color picker not available on this client.")
@@ -321,10 +380,8 @@ local function OpenColorPicker()
   ColorPickerFrame.opacity = 0
   ColorPickerFrame.previousValues = { r = r, g = g, b = b, opacity = 0 }
 
-  -- Retail expects swatchFunc on OK; set both for compatibility
   ColorPickerFrame.swatchFunc = ApplyFromPicker
   ColorPickerFrame.func = ApplyFromPicker
-
   ColorPickerFrame.opacityFunc = nil
   ColorPickerFrame.cancelFunc = CancelToPrev
 
@@ -429,19 +486,31 @@ local function CreateSettingsPanel()
     end
   )
 
+  cbClassRef = MakeCheckbox(
+    "Use class colour",
+    function() return HelloCursorDB.useClassColor end,
+    function(v) HelloCursorDB.useClassColor = v end,
+    cbReactiveRef,
+    -12,
+    function()
+      ApplyTint()
+      RefreshColourUIEnabledState()
+    end
+  )
+
   -- Colour section
   local colorLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-  colorLabel:SetPoint("TOPLEFT", cbReactiveRef, "BOTTOMLEFT", 0, -18)
+  colorLabel:SetPoint("TOPLEFT", cbClassRef, "BOTTOMLEFT", 0, -18)
   colorLabel:SetText("Ring colour")
 
-  local pickBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-  pickBtn:SetSize(120, 22)
-  pickBtn:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -8)
-  pickBtn:SetText("Pick colour...")
-  pickBtn:SetScript("OnClick", OpenColorPicker)
+  pickBtnRef = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  pickBtnRef:SetSize(120, 22)
+  pickBtnRef:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -8)
+  pickBtnRef:SetText("Pick colour...")
+  pickBtnRef:SetScript("OnClick", OpenColorPicker)
 
   local hexLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  hexLabel:SetPoint("LEFT", pickBtn, "RIGHT", 10, 0)
+  hexLabel:SetPoint("LEFT", pickBtnRef, "RIGHT", 10, 0)
   hexLabel:SetText("Hex")
 
   hexEditBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
@@ -451,9 +520,15 @@ local function CreateSettingsPanel()
 
   hexEditBox:SetScript("OnShow", function(self)
     self:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+    RefreshColourUIEnabledState()
   end)
 
   hexEditBox:SetScript("OnEnterPressed", function(self)
+    if HelloCursorDB.useClassColor then
+      self:ClearFocus()
+      return
+    end
+
     local typed = self:GetText()
     local norm = NormalizeHex(typed)
     if norm then
@@ -470,8 +545,8 @@ local function CreateSettingsPanel()
   end)
 
   local hint = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-  hint:SetPoint("TOPLEFT", pickBtn, "BOTTOMLEFT", 0, -6)
-  hint:SetText("Use RRGGBB (example: FF4FD8).")
+  hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
+  hint:SetText("Use RRGGBB (example: FF4FD8). Class colour ignores hex.")
 
   -- Defaults button
   local defaultsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -501,7 +576,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
     HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
-    -- Ensure textures loaded
     SafeSetTexture(ringTexNormal, TEX_NORMAL, nil)
     SafeSetTexture(ringTexSmall, TEX_SMALL, TEX_NORMAL)
 
@@ -516,6 +590,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     return
   end
 
+  -- class colour can change if you ever do something weird (trial/boost/etc),
+  -- but this is cheap and keeps it correct after reloads/zone changes too.
+  ApplyTint()
   UpdateVisibility()
 end)
 
