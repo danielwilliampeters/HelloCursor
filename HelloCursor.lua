@@ -1,8 +1,8 @@
 -- HelloCursor
 -- Smooth asset-based cursor ring (color tintable).
 -- Ring follows cursor normally and FREEZES at last cursor position when mouselook starts (RMB).
--- Optional reactive cursor: shrink while mouselooking (RMB) using texture swap so stroke stays consistent.
--- Added: 0.08s size tween for shrink/return.
+-- Reactive cursor uses a CROSSFADE between normal/small ring assets (no scaling), so stroke thickness stays consistent.
+-- Added: 0.08s tween for crossfade shrink/return.
 -- Added: Color picker + hex input for ring colour (Retail-safe).
 -- Added: Defaults button to reset settings.
 --
@@ -24,10 +24,9 @@ local DEFAULTS = {
   showPvP = true,       -- battlegrounds / arena
   showInCombat = false, -- override: show anywhere while in combat
 
-  reactiveCursor = true, -- shrink on RMB (mouselook) with texture swap
+  reactiveCursor = true, -- crossfade to small ring on RMB (mouselook)
 }
 
-local REACTIVE_SHRINK_SCALE = 0.5
 local TWEEN_DURATION = 0.08
 
 local function CopyDefaults(dst, src)
@@ -106,17 +105,25 @@ ringFrame:SetFrameStrata("TOOLTIP")
 ringFrame:SetSize(DEFAULTS.size, DEFAULTS.size)
 ringFrame:Hide()
 
-local ringTex = ringFrame:CreateTexture(nil, "OVERLAY")
-ringTex:SetAllPoints(true)
+-- Two textures stacked; we crossfade between them, but hard-hide one at rest.
+local ringTexNormal = ringFrame:CreateTexture(nil, "OVERLAY")
+ringTexNormal:SetAllPoints(true)
 
-local TEX_NORMAL = "Interface\\AddOns\\HelloCursor\\ring.tga"
-local TEX_SMALL  = "Interface\\AddOns\\HelloCursor\\ring_small.tga"
+local ringTexSmall = ringFrame:CreateTexture(nil, "OVERLAY")
+ringTexSmall:SetAllPoints(true)
 
-local function SafeSetTexture(path)
-  if not ringTex:SetTexture(path) then
-    ringTex:SetTexture(TEX_NORMAL)
+local TEX_NORMAL = "Interface\\AddOns\\HelloCursor\\ring_glow.tga"
+local TEX_SMALL  = "Interface\\AddOns\\HelloCursor\\ring_small_glow.tga"
+
+local function SafeSetTexture(tex, path, fallback)
+  local ok = tex:SetTexture(path)
+  if not ok and fallback then
+    tex:SetTexture(fallback)
   end
 end
+
+SafeSetTexture(ringTexNormal, TEX_NORMAL, nil)
+SafeSetTexture(ringTexSmall, TEX_SMALL, TEX_NORMAL)
 
 -- Cursor tracking
 local lastCursorX, lastCursorY = nil, nil
@@ -124,62 +131,63 @@ local wasMouselooking = false
 local CURSOR_OFFSET_X = 0
 local CURSOR_OFFSET_Y = 0
 
--- State tracking
-local currentTextureKey = nil
-local currentSize = DEFAULTS.size
-
--- Tween state
+-- Crossfade tween state
+-- mix: 0 = normal, 1 = small
+local currentMix = 0
 local tweenActive = false
 local tweenStart = 0
-local tweenFrom = DEFAULTS.size
-local tweenTo = DEFAULTS.size
+local tweenFrom = 0
+local tweenTo = 0
 
 local function StopTween() tweenActive = false end
-local function StartTween(fromSize, toSize)
+local function StartTween(fromMix, toMix)
   tweenActive = true
   tweenStart = GetTime()
-  tweenFrom = fromSize
-  tweenTo = toSize
+  tweenFrom = fromMix
+  tweenTo = toMix
 end
 
-local function GetDesiredSizeAndTextureKey()
-  local baseSize = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
-  HelloCursorDB.size = baseSize
+-- IMPORTANT: hard-hide one texture at rest so you never "see both"
+local function SetMix(mix)
+  if mix < 0 then mix = 0 elseif mix > 1 then mix = 1 end
+  currentMix = mix
 
-  local mouselooking = (IsMouselooking and IsMouselooking()) and true or false
-  if HelloCursorDB.reactiveCursor and mouselooking then
-    local scaled = Clamp(math.floor(baseSize * REACTIVE_SHRINK_SCALE + 0.5), 16, 256)
-    return scaled, "small"
+  if mix <= 0.0001 then
+    ringTexNormal:Show()
+    ringTexSmall:Hide()
+    ringTexNormal:SetAlpha(1)
+    ringTexSmall:SetAlpha(0)
+    return
   end
 
-  return baseSize, "normal"
-end
-
-local function ApplyTextureKey(texKey)
-  if currentTextureKey == texKey then return end
-  currentTextureKey = texKey
-  if texKey == "small" then
-    SafeSetTexture(TEX_SMALL)
-  else
-    SafeSetTexture(TEX_NORMAL)
+  if mix >= 0.9999 then
+    ringTexNormal:Hide()
+    ringTexSmall:Show()
+    ringTexNormal:SetAlpha(0)
+    ringTexSmall:SetAlpha(1)
+    return
   end
+
+  ringTexNormal:Show()
+  ringTexSmall:Show()
+  ringTexNormal:SetAlpha(1 - mix)
+  ringTexSmall:SetAlpha(mix)
 end
 
 local function ApplyTint()
   local r, g, b, a = HexToRGBA(HelloCursorDB.colorHex)
-  ringTex:SetVertexColor(r, g, b, a)
-end
-
-local function ApplySizeImmediate(size)
-  currentSize = size
-  ringFrame:SetSize(size, size)
+  ringTexNormal:SetVertexColor(r, g, b, a)
+  ringTexSmall:SetVertexColor(r, g, b, a)
 end
 
 local function RefreshVisualsImmediate()
   StopTween()
-  local desiredSize, desiredKey = GetDesiredSizeAndTextureKey()
-  ApplyTextureKey(desiredKey)
-  ApplySizeImmediate(desiredSize)
+
+  local size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
+  HelloCursorDB.size = size
+  ringFrame:SetSize(size, size)
+
+  SetMix(0)
   ApplyTint()
 end
 
@@ -220,21 +228,26 @@ end
 ringFrame:SetScript("OnUpdate", function()
   if not ringFrame:IsShown() then return end
 
-  local desiredSize, desiredKey = GetDesiredSizeAndTextureKey()
-  ApplyTextureKey(desiredKey)
   ApplyTint()
+
+  local mouselooking = (IsMouselooking and IsMouselooking()) and true or false
+  local wantSmall = HelloCursorDB.reactiveCursor and mouselooking
+  local targetMix = wantSmall and 1 or 0
 
   if tweenActive then
     local t = (GetTime() - tweenStart) / TWEEN_DURATION
     if t >= 1 then
       StopTween()
-      ApplySizeImmediate(tweenTo)
+      SetMix(tweenTo) -- snaps + hides the other texture
     else
-      ApplySizeImmediate(Lerp(tweenFrom, tweenTo, EaseInOut(t)))
+      SetMix(Lerp(tweenFrom, tweenTo, EaseInOut(t)))
     end
   else
-    if math.abs(currentSize - desiredSize) >= 0.01 then
-      StartTween(currentSize, desiredSize)
+    if math.abs(currentMix - targetMix) > 0.001 then
+      StartTween(currentMix, targetMix)
+    else
+      -- Ensure we're cleanly snapped (one visible) at rest
+      SetMix(targetMix)
     end
   end
 
@@ -333,7 +346,7 @@ local function ResetToDefaults()
 
   RefreshVisualsImmediate()
   UpdateVisibility()
-  RefreshOptionsUI() -- ✅ instant UI update
+  RefreshOptionsUI()
 end
 
 -- --------------------------
@@ -410,7 +423,10 @@ local function CreateSettingsPanel()
     function(v) HelloCursorDB.reactiveCursor = v end,
     cbCombatRef,
     -12,
-    function() RefreshVisualsImmediate() end
+    function()
+      StopTween()
+      SetMix(0)
+    end
   )
 
   -- Colour section
@@ -485,13 +501,11 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
     HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
-    SafeSetTexture(TEX_NORMAL)
-    currentTextureKey = "normal"
+    -- Ensure textures loaded
+    SafeSetTexture(ringTexNormal, TEX_NORMAL, nil)
+    SafeSetTexture(ringTexSmall, TEX_SMALL, TEX_NORMAL)
 
-    StopTween()
-    ApplySizeImmediate(HelloCursorDB.size)
-    ApplyTint()
-
+    RefreshVisualsImmediate()
     UpdateVisibility()
 
     if not settingsCategory then
@@ -499,7 +513,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 
     print("|cFF00FF00HelloCursor:|r v" .. VERSION .. " Loaded. Use |cFFFFA500/hc|r to open options.")
-
     return
   end
 
