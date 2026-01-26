@@ -1,0 +1,8 @@
+## Interface: 120000
+## Title: HelloCursor
+## Notes: Adds a configurable ring around the cursor (stays visible in mouselook).
+## Author: Daniel Peters
+## Version: 1.0.0
+## SavedVariables: HelloCursorDB
+
+HelloCursor.lua
