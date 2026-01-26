@@ -6,10 +6,10 @@
 --   Interface/AddOns/HelloCursor/ring.tga
 --   Interface/AddOns/HelloCursor/ring_small.tga
 
-HelloCursorDB = HelloCursorDB or {}
-
-local VERSION = "1.1.0"
 local ADDON_NAME = ...
+local VERSION = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "dev"
+
+HelloCursorDB = HelloCursorDB or {}
 
 local DEFAULTS = {
   enabled = true,
