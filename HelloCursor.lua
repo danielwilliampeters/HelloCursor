@@ -1,11 +1,6 @@
 -- HelloCursor
--- Smooth asset-based cursor ring (color tintable).
+-- Asset-based cursor ring (tintable), with optional reactive crossfade to a smaller ring on RMB (mouselook).
 -- Ring follows cursor normally and FREEZES at last cursor position when mouselook starts (RMB).
--- Reactive cursor uses a CROSSFADE between normal/small ring assets (no scaling), so stroke thickness stays consistent.
--- Added: 0.08s tween for crossfade shrink/return.
--- Added: Color picker + hex input for ring colour (Retail-safe).
--- Added: Defaults button to reset settings.
--- Added: Option to use player CLASS COLOUR (ignores hex).
 --
 -- REQUIRED FILES:
 --   Interface/AddOns/HelloCursor/ring.tga
@@ -15,21 +10,35 @@ HelloCursorDB = HelloCursorDB or {}
 
 local VERSION = "1.0.0"
 local ADDON_NAME = ...
+
 local DEFAULTS = {
   enabled = true,
-  colorHex = "FF4FD8", -- default PINK (RRGGBB or AARRGGBB)
-  useClassColor = false, -- NEW: tint ring to player class colour
+
+  -- Colour
+  colorHex = "FF4FD8",      -- RRGGBB or AARRGGBB
+  useClassColor = false,    -- when true, ignores colorHex for RGB
+
+  -- Ring size (frame size; textures are scaled to fit)
   size = 72,
 
+  -- Visibility rules
   showWorld = true,
-  showPvE = true,       -- dungeons / delves / raids
-  showPvP = true,       -- battlegrounds / arena
-  showInCombat = false, -- override: show anywhere while in combat
+  showPvE = true,           -- dungeons / delves / raids
+  showPvP = true,           -- battlegrounds / arena
+  showInCombat = false,     -- override: show anywhere while in combat
 
-  reactiveCursor = true, -- crossfade to small ring on RMB (mouselook)
+  -- Behaviour
+  reactiveCursor = true,    -- crossfade to small ring while mouselooking
 }
 
+local TEX_NORMAL = "Interface\\AddOns\\HelloCursor\\ring.tga"
+local TEX_SMALL  = "Interface\\AddOns\\HelloCursor\\ring_small.tga"
+
 local TWEEN_DURATION = 0.08
+
+-- ---------------------------------------------------------------------
+-- Utils
+-- ---------------------------------------------------------------------
 
 local function CopyDefaults(dst, src)
   if type(dst) ~= "table" then dst = {} end
@@ -84,6 +93,17 @@ local function RGBAtoHex(r, g, b)
   return string.format("%02X%02X%02X", r, g, b)
 end
 
+local function SafeSetTexture(tex, path, fallback)
+  local ok = tex:SetTexture(path)
+  if not ok and fallback then
+    tex:SetTexture(fallback)
+  end
+end
+
+-- ---------------------------------------------------------------------
+-- Visibility rules
+-- ---------------------------------------------------------------------
+
 local function IsAllowedInZone()
   if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
     return true
@@ -101,7 +121,14 @@ local function IsAllowedInZone()
   return HelloCursorDB.showPvE
 end
 
--- Main ring frame
+local function ShouldShowRing()
+  return HelloCursorDB.enabled and IsAllowedInZone()
+end
+
+-- ---------------------------------------------------------------------
+-- Frame + textures
+-- ---------------------------------------------------------------------
+
 local ringFrame = CreateFrame("Frame", "HelloCursorFrame", UIParent)
 ringFrame:SetFrameStrata("TOOLTIP")
 ringFrame:SetSize(DEFAULTS.size, DEFAULTS.size)
@@ -114,27 +141,68 @@ ringTexNormal:SetAllPoints(true)
 local ringTexSmall = ringFrame:CreateTexture(nil, "OVERLAY")
 ringTexSmall:SetAllPoints(true)
 
-local TEX_NORMAL = "Interface\\AddOns\\HelloCursor\\ring.tga"
-local TEX_SMALL  = "Interface\\AddOns\\HelloCursor\\ring_small.tga"
-
-local function SafeSetTexture(tex, path, fallback)
-  local ok = tex:SetTexture(path)
-  if not ok and fallback then
-    tex:SetTexture(fallback)
-  end
-end
-
 SafeSetTexture(ringTexNormal, TEX_NORMAL, nil)
 SafeSetTexture(ringTexSmall, TEX_SMALL, TEX_NORMAL)
 
--- Cursor tracking
-local lastCursorX, lastCursorY = nil, nil
-local wasMouselooking = false
-local CURSOR_OFFSET_X = 0
-local CURSOR_OFFSET_Y = 0
+-- ---------------------------------------------------------------------
+-- Colour (class colour or hex)
+-- ---------------------------------------------------------------------
 
--- Crossfade tween state
+local function GetPlayerClassRGB()
+  local _, classFile = UnitClass("player")
+  classFile = classFile or "PRIEST"
+
+  if C_ClassColor and C_ClassColor.GetClassColor then
+    local c = C_ClassColor.GetClassColor(classFile)
+    if c and c.GetRGB then
+      local r, g, b = c:GetRGB()
+      return r, g, b
+    elseif c and c.r then
+      return c.r, c.g, c.b
+    end
+  end
+
+  if RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
+    local c = RAID_CLASS_COLORS[classFile]
+    return c.r, c.g, c.b
+  end
+
+  if GetClassColor then
+    local r, g, b = GetClassColor(classFile)
+    return r, g, b
+  end
+
+  return 1, 1, 1
+end
+
+-- Cache last applied tint to avoid reapplying every frame
+local lastTintKey = nil
+
+local function ComputeTint()
+  if HelloCursorDB.useClassColor then
+    local r, g, b = GetPlayerClassRGB()
+    -- alpha: keep at 1 for class colour mode
+    return r, g, b, 1, ("class:%0.4f:%0.4f:%0.4f"):format(r, g, b)
+  end
+
+  local r, g, b, a = HexToRGBA(HelloCursorDB.colorHex)
+  return r, g, b, a, ("hex:%s"):format(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+end
+
+local function ApplyTintIfNeeded(force)
+  local r, g, b, a, key = ComputeTint()
+  if force or key ~= lastTintKey then
+    ringTexNormal:SetVertexColor(r, g, b, a)
+    ringTexSmall:SetVertexColor(r, g, b, a)
+    lastTintKey = key
+  end
+end
+
+-- ---------------------------------------------------------------------
+-- Crossfade tween (normal <-> small)
 -- mix: 0 = normal, 1 = small
+-- ---------------------------------------------------------------------
+
 local currentMix = 0
 local tweenActive = false
 local tweenStart = 0
@@ -149,11 +217,11 @@ local function StartTween(fromMix, toMix)
   tweenTo = toMix
 end
 
--- IMPORTANT: hard-hide one texture at rest so you never "see both"
 local function SetMix(mix)
   if mix < 0 then mix = 0 elseif mix > 1 then mix = 1 end
   currentMix = mix
 
+  -- Hard-hide one texture at rest so you never “see both”
   if mix <= 0.0001 then
     ringTexNormal:Show()
     ringTexSmall:Hide()
@@ -176,72 +244,25 @@ local function SetMix(mix)
   ringTexSmall:SetAlpha(mix)
 end
 
--- ---- Class colour helpers ----
-
-local function GetPlayerClassRGB()
-  local _, classFile = UnitClass("player")
-  classFile = classFile or "PRIEST"
-
-  -- Preferred: ColorMixin (Retail)
-  if C_ClassColor and C_ClassColor.GetClassColor then
-    local c = C_ClassColor.GetClassColor(classFile)
-    if c and c.GetRGB then
-      local r, g, b = c:GetRGB()
-      return r, g, b
-    elseif c and c.r then
-      return c.r, c.g, c.b
-    end
-  end
-
-  -- Fallback: RAID_CLASS_COLORS
-  if RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
-    local c = RAID_CLASS_COLORS[classFile]
-    return c.r, c.g, c.b
-  end
-
-  -- Final fallback: FrameXML helper
-  if GetClassColor then
-    local r, g, b = GetClassColor(classFile)
-    return r, g, b
-  end
-
-  return 1, 1, 1
+local function WantsSmallRing()
+  if not HelloCursorDB.reactiveCursor then return false end
+  return (IsMouselooking and IsMouselooking()) and true or false
 end
 
-local function GetRingRGBA()
-  if HelloCursorDB.useClassColor then
-    local r, g, b = GetPlayerClassRGB()
-    return r, g, b, 1
-  end
-  return HexToRGBA(HelloCursorDB.colorHex)
+local function SnapToTargetMix()
+  SetMix(WantsSmallRing() and 1 or 0)
 end
 
-local function ApplyTint()
-  local r, g, b, a = GetRingRGBA()
-  ringTexNormal:SetVertexColor(r, g, b, a)
-  ringTexSmall:SetVertexColor(r, g, b, a)
-end
+-- ---------------------------------------------------------------------
+-- Cursor anchoring (freeze on mouselook start)
+-- ---------------------------------------------------------------------
 
-local function RefreshVisualsImmediate()
-  StopTween()
+local lastCursorX, lastCursorY = nil, nil
+local wasMouselooking = false
+local CURSOR_OFFSET_X = 0
+local CURSOR_OFFSET_Y = 0
 
-  local size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
-  HelloCursorDB.size = size
-  ringFrame:SetSize(size, size)
-
-  SetMix(0)
-  ApplyTint()
-end
-
-local function UpdateVisibility()
-  if HelloCursorDB.enabled and IsAllowedInZone() then
-    ringFrame:Show()
-  else
-    ringFrame:Hide()
-  end
-end
-
-local function SetRingToCursor()
+local function UpdateRingPosition()
   local scale = UIParent:GetEffectiveScale()
   local cx, cy = GetCursorPosition()
   cx, cy = cx / scale, cy / scale
@@ -250,9 +271,8 @@ local function SetRingToCursor()
 
   if not mouselooking then
     lastCursorX, lastCursorY = cx, cy
-  end
-
-  if mouselooking and not wasMouselooking then
+  elseif not wasMouselooking then
+    -- just entered mouselook, freeze at last known cursor
     if not lastCursorX or not lastCursorY then
       lastCursorX, lastCursorY = cx, cy
     end
@@ -267,14 +287,41 @@ local function SetRingToCursor()
   ringFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
 end
 
+-- ---------------------------------------------------------------------
+-- Visual refresh helpers
+-- ---------------------------------------------------------------------
+
+local function RefreshSize()
+  local size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
+  HelloCursorDB.size = size
+  ringFrame:SetSize(size, size)
+end
+
+local function RefreshVisualsImmediate()
+  StopTween()
+  RefreshSize()
+  ApplyTintIfNeeded(true)
+  SnapToTargetMix()
+end
+
+local function UpdateVisibility()
+  if ShouldShowRing() then
+    ringFrame:Show()
+  else
+    ringFrame:Hide()
+  end
+end
+
+-- ---------------------------------------------------------------------
+-- OnUpdate loop
+-- ---------------------------------------------------------------------
+
 ringFrame:SetScript("OnUpdate", function()
   if not ringFrame:IsShown() then return end
 
-  ApplyTint()
+  ApplyTintIfNeeded(false)
 
-  local mouselooking = (IsMouselooking and IsMouselooking()) and true or false
-  local wantSmall = HelloCursorDB.reactiveCursor and mouselooking
-  local targetMix = wantSmall and 1 or 0
+  local targetMix = WantsSmallRing() and 1 or 0
 
   if tweenActive then
     local t = (GetTime() - tweenStart) / TWEEN_DURATION
@@ -288,29 +335,40 @@ ringFrame:SetScript("OnUpdate", function()
     if math.abs(currentMix - targetMix) > 0.001 then
       StartTween(currentMix, targetMix)
     else
+      -- Keep snapped cleanly at rest
       SetMix(targetMix)
     end
   end
 
-  SetRingToCursor()
+  UpdateRingPosition()
 end)
 
--- --------------------------
--- Color picker compatibility
--- --------------------------
+-- ---------------------------------------------------------------------
+-- Color picker (Retail-safe)
+-- ---------------------------------------------------------------------
 
-local hexEditBox -- assigned in settings UI
-local pickBtnRef -- assigned in settings UI (so we can enable/disable)
-local cbClassRef -- assigned in settings UI
+local hexEditBox
+local pickBtnRef
+local cbClassRef
 
--- UI refs so we can refresh without closing the panel
 local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
+
+local function GetPickerWidget()
+  if not ColorPickerFrame then return nil end
+  if ColorPickerFrame.GetColorRGB and ColorPickerFrame.SetColorRGB then
+    return ColorPickerFrame
+  end
+  if ColorPickerFrame.Content and ColorPickerFrame.Content.ColorPicker
+    and ColorPickerFrame.Content.ColorPicker.GetColorRGB
+    and ColorPickerFrame.Content.ColorPicker.SetColorRGB then
+    return ColorPickerFrame.Content.ColorPicker
+  end
+  return nil
+end
 
 local function RefreshColourUIEnabledState()
   local enabled = not HelloCursorDB.useClassColor
-  if pickBtnRef then
-    pickBtnRef:SetEnabled(enabled)
-  end
+  if pickBtnRef then pickBtnRef:SetEnabled(enabled) end
   if hexEditBox then
     hexEditBox:SetEnabled(enabled)
     hexEditBox:SetAlpha(enabled and 1 or 0.5)
@@ -332,27 +390,12 @@ local function RefreshOptionsUI()
   RefreshColourUIEnabledState()
 end
 
-local function GetPickerWidget()
-  if not ColorPickerFrame then return nil end
-  if ColorPickerFrame.GetColorRGB and ColorPickerFrame.SetColorRGB then
-    return ColorPickerFrame
-  end
-  if ColorPickerFrame.Content and ColorPickerFrame.Content.ColorPicker
-    and ColorPickerFrame.Content.ColorPicker.GetColorRGB
-    and ColorPickerFrame.Content.ColorPicker.SetColorRGB then
-    return ColorPickerFrame.Content.ColorPicker
-  end
-  return nil
-end
-
 local function SetColorHex(hex)
   local norm = NormalizeHex(hex)
   if not norm then return end
   HelloCursorDB.colorHex = norm
-  ApplyTint()
-  if hexEditBox then
-    hexEditBox:SetText(norm)
-  end
+  ApplyTintIfNeeded(true)
+  if hexEditBox then hexEditBox:SetText(norm) end
 end
 
 local function OpenColorPicker()
@@ -389,9 +432,9 @@ local function OpenColorPicker()
   ColorPickerFrame:Show()
 end
 
--- --------------------------
--- Defaults reset
--- --------------------------
+-- ---------------------------------------------------------------------
+-- Defaults
+-- ---------------------------------------------------------------------
 
 local function ResetToDefaults()
   for k, v in pairs(DEFAULTS) do
@@ -406,9 +449,9 @@ local function ResetToDefaults()
   RefreshOptionsUI()
 end
 
--- --------------------------
+-- ---------------------------------------------------------------------
 -- Settings UI
--- --------------------------
+-- ---------------------------------------------------------------------
 
 local function CreateSettingsPanel()
   if not Settings or not Settings.RegisterCanvasLayoutCategory then return nil end
@@ -481,8 +524,9 @@ local function CreateSettingsPanel()
     cbCombatRef,
     -12,
     function()
+      -- keep current state consistent immediately
       StopTween()
-      SetMix(0)
+      SnapToTargetMix()
     end
   )
 
@@ -493,7 +537,7 @@ local function CreateSettingsPanel()
     cbReactiveRef,
     -12,
     function()
-      ApplyTint()
+      ApplyTintIfNeeded(true)
       RefreshColourUIEnabledState()
     end
   )
@@ -548,7 +592,6 @@ local function CreateSettingsPanel()
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
   hint:SetText("Use RRGGBB (example: FF4FD8). Class colour ignores hex.")
 
-  -- Defaults button
   local defaultsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
   defaultsBtn:SetSize(140, 22)
   defaultsBtn:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -14)
@@ -562,7 +605,10 @@ end
 
 local settingsCategory = nil
 
+-- ---------------------------------------------------------------------
 -- Events
+-- ---------------------------------------------------------------------
+
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -576,6 +622,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
     HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
+    -- Ensure textures are present
     SafeSetTexture(ringTexNormal, TEX_NORMAL, nil)
     SafeSetTexture(ringTexSmall, TEX_SMALL, TEX_NORMAL)
 
@@ -590,13 +637,15 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     return
   end
 
-  -- class colour can change if you ever do something weird (trial/boost/etc),
-  -- but this is cheap and keeps it correct after reloads/zone changes too.
-  ApplyTint()
+  -- Keep correct after zone/combat changes (combat override logic depends on it)
+  ApplyTintIfNeeded(false)
   UpdateVisibility()
 end)
 
+-- ---------------------------------------------------------------------
 -- Slash commands
+-- ---------------------------------------------------------------------
+
 SLASH_HELLOCURSOR1 = "/hc"
 SLASH_HELLOCURSOR2 = "/hellocursor"
 
