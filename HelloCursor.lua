@@ -463,8 +463,8 @@ local function CreateSettingsPanel()
   title:SetPoint("TOPLEFT", 16, -16)
   title:SetText("HelloCursor")
 
-  local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+  local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
   subtitle:SetText("Cursor ring settings")
 
   local function MakeCheckbox(label, get, set, anchor, yOff, onChange)
