@@ -19,7 +19,7 @@ local DEFAULTS = {
   useClassColor = false,    -- when true, ignores colorHex for RGB
 
   -- Ring size (frame size; textures are scaled to fit)
-  size = 72,
+  size = 90,
 
   -- Visibility rules
   showWorld = true,
