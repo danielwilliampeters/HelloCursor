@@ -6,13 +6,17 @@
 --   Global Cooldown spinner around the cursor ring (CooldownFrame swipe using the same ring texture).
 --
 -- REQUIRED FILES:
---   Interface/AddOns/HelloCursor/ring.tga
---   Interface/AddOns/HelloCursor/ring_small.tga
+--   Interface/AddOns/HelloCursor/ring_64.tga ... ring_128.tga
+--   Interface/AddOns/HelloCursor/ring_small_64.tga ... ring_small_128.tga
 
 local ADDON_NAME = ...
 local VERSION = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "dev"
 
 HelloCursorDB = HelloCursorDB or {}
+
+-- ---------------------------------------------------------------------
+-- Defaults
+-- ---------------------------------------------------------------------
 
 local DEFAULTS = {
   enabled = true,
@@ -21,7 +25,7 @@ local DEFAULTS = {
   colorHex = "FF4FD8",      -- RRGGBB or AARRGGBB
   useClassColor = false,    -- when true, ignores colorHex for RGB
 
-  -- Ring size (frame size; textures are scaled to fit)
+  -- Ring size (logical size; snapped to authored assets)
   size = 96,
 
   -- Visibility rules
@@ -54,33 +58,29 @@ local RING_SMALL_TEX_BY_SIZE = {
   [128] = "Interface\\AddOns\\HelloCursor\\ring_small_128.tga",
 }
 
-local function NearestKey(map, target)
-  local bestKey, bestDist
-  for k in pairs(map) do
-    local d = math.abs(k - target)
-    if not bestDist or d < bestDist then
-      bestDist, bestKey = d, k
-    end
-  end
-  return bestKey
-end
+-- ---------------------------------------------------------------------
+-- Tunables
+-- ---------------------------------------------------------------------
 
 local TWEEN_DURATION = 0.08
 local GCD_SPELL_ID = 61304 -- "Global Cooldown"
 
--- Spinner style: "darker shade" of ring tint
-local SPINNER_ALPHA_MULT = 0.9  -- applied to ring alpha (or 1 in class-colour mode)
--- Brighten near end of GCD
-local SPINNER_SHADE = 0.25
-local SPINNER_BASE_ALPHA = 0.35
-local SPINNER_END_ALPHA  = 1.0
-local SPINNER_BRIGHTEN_AT = 0.60
+-- Spinner styling (NO brighten ramp; constant shade/alpha)
+local SPINNER_SHADE = 0.25            -- darken the ring colour for the swipe
+local SPINNER_BASE_ALPHA = 0.55       -- make it clearly visible (tweak to taste)
+local SPINNER_ALPHA_MULT = 0.90       -- multiplied by ring alpha (hex AARRGGBB)
 
-local sizeSliderRef
-local sizeValueRef
+-- Pop at end of GCD (a quick scale pulse on the ring frame)
+local GCD_POP_ENABLED   = true
+local GCD_POP_SCALE     = 1.16
+local GCD_POP_UP_TIME   = 0.045
+local GCD_POP_DOWN_TIME = 0.075
+
+-- Fixed canvas so ring thickness never scales (textures are authored for this)
+local RING_CANVAS_SIZE = 128
 
 -- ---------------------------------------------------------------------
--- Utils
+-- Small utils
 -- ---------------------------------------------------------------------
 
 local function CopyDefaults(dst, src)
@@ -143,8 +143,18 @@ local function SafeSetTexture(tex, path, fallback)
   end
 end
 
+local function NearestKey(map, target)
+  local bestKey, bestDist
+  for k in pairs(map) do
+    local d = math.abs(k - target)
+    if not bestDist or d < bestDist then
+      bestDist, bestKey = d, k
+    end
+  end
+  return bestKey
+end
+
 local function GetSpellCooldownCompat(spellID)
-  -- Modern clients may prefer C_Spell.GetSpellCooldown
   if C_Spell and C_Spell.GetSpellCooldown then
     local info = C_Spell.GetSpellCooldown(spellID)
     if info then
@@ -163,13 +173,6 @@ local function GetSpellCooldownCompat(spellID)
 
   return 0, 0, 0
 end
-
--- ---------------------------------------------------------------------
--- State / forward declarations (avoid nil-order issues)
--- ---------------------------------------------------------------------
-
-local currentMix = 0
-local WantsSmallRing -- defined later, used by spinner fallback
 
 -- ---------------------------------------------------------------------
 -- Visibility rules
@@ -202,17 +205,16 @@ end
 
 local ringFrame = CreateFrame("Frame", "HelloCursorFrame", UIParent)
 ringFrame:SetFrameStrata("TOOLTIP")
-ringFrame:SetSize(DEFAULTS.size, DEFAULTS.size)
+ringFrame:SetSize(RING_CANVAS_SIZE, RING_CANVAS_SIZE)
 ringFrame:Hide()
 
--- Two textures stacked; we crossfade between them, but hard-hide one at rest.
 local ringTexNormal = ringFrame:CreateTexture(nil, "OVERLAY")
 ringTexNormal:SetAllPoints(true)
 
 local ringTexSmall = ringFrame:CreateTexture(nil, "OVERLAY")
 ringTexSmall:SetAllPoints(true)
 
--- Initial textures (will be overridden by RefreshSize)
+-- Initial textures (overridden by RefreshSize)
 SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[96], nil)
 SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[96], RING_TEX_BY_SIZE[96])
 
@@ -222,14 +224,10 @@ gcdSpinner:SetAllPoints(true)
 gcdSpinner:SetFrameLevel(ringFrame:GetFrameLevel() + 5)
 gcdSpinner:Hide()
 
--- Keep it clean: no numbers, no bling, no edge.
 if gcdSpinner.SetHideCountdownNumbers then gcdSpinner:SetHideCountdownNumbers(true) end
 if gcdSpinner.SetDrawBling then gcdSpinner:SetDrawBling(false) end
 if gcdSpinner.SetDrawEdge then gcdSpinner:SetDrawEdge(false) end
-
-if gcdSpinner.SetReverse then
-  gcdSpinner:SetReverse(false)
-end
+if gcdSpinner.SetReverse then gcdSpinner:SetReverse(false) end
 
 -- ---------------------------------------------------------------------
 -- Colour (class colour or hex)
@@ -261,7 +259,6 @@ local function GetPlayerClassRGB()
   return 1, 1, 1
 end
 
--- Cache last applied tint to avoid reapplying every frame
 local lastTintKey = nil
 
 local function ComputeTint()
@@ -274,12 +271,20 @@ local function ComputeTint()
   return r, g, b, a, ("hex:%s"):format(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
 end
 
-local function SetSpinnerBaseTint()
+local function SetSpinnerTintAndAlpha()
   if not gcdSpinner.SetSwipeColor then return end
 
-  local r, g, b = ComputeTint() -- ignore returned alpha
-  -- Start dark
-  gcdSpinner:SetSwipeColor(r * SPINNER_SHADE, g * SPINNER_SHADE, b * SPINNER_SHADE, 1)
+  local r, g, b, ringA = ComputeTint()
+  local shade = SPINNER_SHADE
+
+  gcdSpinner:SetSwipeColor(r * shade, g * shade, b * shade, 1)
+
+  -- keep spinner visible, but respect ring alpha if user uses AARRGGBB
+  local a = SPINNER_BASE_ALPHA
+  if not HelloCursorDB.useClassColor then
+    a = a * (ringA or 1) * SPINNER_ALPHA_MULT
+  end
+  gcdSpinner:SetAlpha(Clamp(a, 0, 1))
 end
 
 local function ApplyTintIfNeeded(force)
@@ -287,7 +292,7 @@ local function ApplyTintIfNeeded(force)
   if force or key ~= lastTintKey then
     ringTexNormal:SetVertexColor(r, g, b, a)
     ringTexSmall:SetVertexColor(r, g, b, a)
-    SetSpinnerBaseTint()
+    SetSpinnerTintAndAlpha()
     lastTintKey = key
   end
 end
@@ -296,6 +301,10 @@ end
 -- Spinner texture selection (normal vs small)
 -- ---------------------------------------------------------------------
 
+local currentMix = 0
+local WantsSmallRing -- forward decl
+
+local lastTexKey = 96
 local spinnerUsingSmall = nil
 local spinnerTexKey = nil
 local lastWantedSmall = nil
@@ -311,7 +320,6 @@ local function SetSpinnerSwipeTextureForMix(mix)
   end
 
   local key = lastTexKey or 96
-
   local tex = useSmall and RING_SMALL_TEX_BY_SIZE[key] or RING_TEX_BY_SIZE[key]
   if not tex then
     key = 96
@@ -319,7 +327,6 @@ local function SetSpinnerSwipeTextureForMix(mix)
     tex = RING_TEX_BY_SIZE[96]
   end
 
-  -- IMPORTANT: also refresh if the size key changed
   if spinnerUsingSmall == useSmall and spinnerTexKey == key then
     return
   end
@@ -339,8 +346,37 @@ local function SetSpinnerSwipeTextureForMix(mix)
 end
 
 -- ---------------------------------------------------------------------
--- GCD spinner logic
+-- GCD spinner + GCD end pop
 -- ---------------------------------------------------------------------
+
+local gcdWasActive = false
+
+local gcdPopAnim = ringFrame:CreateAnimationGroup()
+
+local popUp = gcdPopAnim:CreateAnimation("Scale")
+popUp:SetOrder(1)
+if popUp.SetScaleFrom then popUp:SetScaleFrom(1, 1) end
+popUp:SetScale(GCD_POP_SCALE, GCD_POP_SCALE)
+popUp:SetDuration(GCD_POP_UP_TIME)
+popUp:SetSmoothing("OUT")
+
+local popDown = gcdPopAnim:CreateAnimation("Scale")
+popDown:SetOrder(2)
+if popDown.SetScaleFrom then popDown:SetScaleFrom(GCD_POP_SCALE, GCD_POP_SCALE) end
+popDown:SetScale(1, 1)
+popDown:SetDuration(GCD_POP_DOWN_TIME)
+popDown:SetSmoothing("IN")
+
+local function TriggerGCDPop()
+  if not GCD_POP_ENABLED then return end
+  if not ringFrame:IsShown() then return end
+  if not HelloCursorDB.showGCDSpinner then return end
+
+  if gcdPopAnim:IsPlaying() then
+    gcdPopAnim:Stop()
+  end
+  gcdPopAnim:Play()
+end
 
 local function UpdateGCDSpinner()
   if not ringFrame:IsShown() or not HelloCursorDB.showGCDSpinner then
@@ -355,10 +391,31 @@ local function UpdateGCDSpinner()
   end
 
   gcdSpinner:Show()
-  SetSpinnerBaseTint()
-  gcdSpinner:SetAlpha(SPINNER_BASE_ALPHA)
+  SetSpinnerTintAndAlpha()
   SetSpinnerSwipeTextureForMix(nil)
   gcdSpinner:SetCooldown(startTime, duration)
+end
+
+local function CheckGCDPop()
+  if not HelloCursorDB.showGCDSpinner then
+    gcdWasActive = false
+    return
+  end
+
+  local startTime, duration, enabled = GetSpellCooldownCompat(GCD_SPELL_ID)
+  local now = GetTime()
+
+  local gcdActiveNow = false
+  if enabled ~= 0 and duration and duration > 0 and startTime and startTime > 0 then
+    local remaining = (startTime + duration) - now
+    gcdActiveNow = remaining > 0
+  end
+
+  if gcdWasActive and (not gcdActiveNow) then
+    TriggerGCDPop()
+  end
+
+  gcdWasActive = gcdActiveNow
 end
 
 -- ---------------------------------------------------------------------
@@ -380,10 +437,10 @@ local function StartTween(fromMix, toMix)
 end
 
 local function SetMix(mix)
-  if mix < 0 then mix = 0 elseif mix > 1 then mix = 1 end
+  mix = Clamp(mix, 0, 1)
   currentMix = mix
 
-  -- Keep spinner texture in sync with the ring state (during tween too)
+  -- keep spinner texture in sync with ring state (during tween too)
   SetSpinnerSwipeTextureForMix(mix)
 
   -- Hard-hide one texture at rest so you never “see both”
@@ -457,23 +514,31 @@ local function UpdateRingPosition()
   ringFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
 end
 
+-- Capture cursor before mouselook clamps it
+if WorldFrame and WorldFrame.HookScript then
+  WorldFrame:HookScript("OnMouseDown", function(_, button)
+    if button == "RightButton" then
+      CaptureCursorNow()
+    end
+  end)
+end
+
 -- ---------------------------------------------------------------------
 -- Visual refresh helpers
 -- ---------------------------------------------------------------------
-
-local RING_CANVAS_SIZE = 128
 
 local function RefreshSize()
   local size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
   HelloCursorDB.size = size
 
-  -- IMPORTANT: fixed canvas size so ring thickness never scales
+  -- fixed canvas size so ring thickness never scales
   ringFrame:SetSize(RING_CANVAS_SIZE, RING_CANVAS_SIZE)
 
-  local key = NearestKey(RING_TEX_BY_SIZE, size)
-  if key and key ~= lastTexKey then
+  local key = NearestKey(RING_TEX_BY_SIZE, size) or 96
+  if key ~= lastTexKey then
     SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[key], nil)
     SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[key], RING_TEX_BY_SIZE[key])
+
     lastTexKey = key
     spinnerTexKey = nil
     spinnerUsingSmall = nil
@@ -488,7 +553,6 @@ local function RefreshVisualsImmediate()
   RefreshSize()
   ApplyTintIfNeeded(true)
   SnapToTargetMix()
-  -- Ensure spinner matches current state after snapping
   SetSpinnerSwipeTextureForMix(currentMix)
   UpdateGCDSpinner()
 end
@@ -515,15 +579,13 @@ ringFrame:SetScript("OnUpdate", function()
 
   ApplyTintIfNeeded(false)
 
-  local targetMix = WantsSmallRing() and 1 or 0
-
   local wantedSmall = WantsSmallRing()
   if lastWantedSmall ~= wantedSmall then
     lastWantedSmall = wantedSmall
-    -- Force texture switch + refresh
     SetSpinnerSwipeTextureForMix(wantedSmall and 1 or 0)
   end
 
+  local targetMix = wantedSmall and 1 or 0
   if tweenActive then
     local t = (GetTime() - tweenStart) / TWEEN_DURATION
     if t >= 1 then
@@ -540,48 +602,14 @@ ringFrame:SetScript("OnUpdate", function()
     end
   end
 
-  -- Brighten spinner near the end of the GCD (by fading shade to full colour)
-  if gcdSpinner:IsShown() and gcdSpinner.SetSwipeColor then
-    local startTime, duration, enabled = GetSpellCooldownCompat(GCD_SPELL_ID)
-    if enabled ~= 0 and duration and duration > 0 and startTime and startTime > 0 then
-      local now = GetTime()
-      local remaining = (startTime + duration) - now
-
-      if remaining > 0 then
-        local pct = remaining / duration
-
-        local t = 0
-        if pct <= SPINNER_BRIGHTEN_AT then
-          t = 1 - (pct / SPINNER_BRIGHTEN_AT) -- 0 → 1 over final window
-        end
-
-        local r, g, b = ComputeTint()
-        local shade = Lerp(SPINNER_SHADE, 1.0, t)
-
-        -- Visible brightening: dark -> full ring colour
-        gcdSpinner:SetSwipeColor(r * shade, g * shade, b * shade, 1)
-
-        -- Optional: also lift alpha a bit (keep if you want)
-        local alpha = Lerp(SPINNER_BASE_ALPHA, SPINNER_END_ALPHA, t)
-        gcdSpinner:SetAlpha(alpha)
-      end
-    end
-  end
+  -- Only detect end-of-GCD to fire the pop (no brighten logic here)
+  CheckGCDPop()
 
   UpdateRingPosition()
 end)
 
--- Capture cursor before mouselook clamps it
-if WorldFrame and WorldFrame.HookScript then
-  WorldFrame:HookScript("OnMouseDown", function(_, button)
-    if button == "RightButton" then
-      CaptureCursorNow()
-    end
-  end)
-end
-
 -- ---------------------------------------------------------------------
--- Color picker (Retail-safe)
+-- Settings UI (unchanged logic, just calls our refreshed helpers)
 -- ---------------------------------------------------------------------
 
 local hexEditBox
@@ -590,6 +618,9 @@ local cbClassRef
 
 local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
 local cbGCDRef
+
+local sizeSliderRef
+local sizeValueRef
 
 local function GetPickerWidget()
   if not ColorPickerFrame then return nil end
@@ -641,6 +672,7 @@ local function SetColorHex(hex)
   if not norm then return end
   HelloCursorDB.colorHex = norm
   ApplyTintIfNeeded(true)
+  SetSpinnerTintAndAlpha()
   if hexEditBox then hexEditBox:SetText(norm) end
 end
 
@@ -678,15 +710,10 @@ local function OpenColorPicker()
   ColorPickerFrame:Show()
 end
 
--- ---------------------------------------------------------------------
--- Defaults
--- ---------------------------------------------------------------------
-
 local function ResetToDefaults()
   for k, v in pairs(DEFAULTS) do
     HelloCursorDB[k] = v
   end
-
   HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
   HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
@@ -694,10 +721,6 @@ local function ResetToDefaults()
   UpdateVisibility()
   RefreshOptionsUI()
 end
-
--- ---------------------------------------------------------------------
--- Settings UI
--- ---------------------------------------------------------------------
 
 local function CreateSettingsPanel()
   if not Settings or not Settings.RegisterCanvasLayoutCategory then return nil end
@@ -738,7 +761,6 @@ local function CreateSettingsPanel()
     return cb
   end
 
-  -- Visual-only separator. IMPORTANT: do NOT use this as an anchor for other widgets.
   local function MakeSeparator(anchor, yOff)
     local sep = panel:CreateTexture(nil, "ARTWORK")
     sep:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -16, yOff)
@@ -747,9 +769,7 @@ local function CreateSettingsPanel()
     return sep
   end
 
-  -- =========================
   -- Visibility
-  -- =========================
   local visHeader = MakeHeader("Visibility", subtitle, -18)
 
   cbWorldRef = MakeCheckbox(
@@ -786,9 +806,7 @@ local function CreateSettingsPanel()
 
   MakeSeparator(cbCombatRef, -14)
 
-  -- =========================
   -- Behaviour
-  -- =========================
   local behHeader = MakeHeader("Behaviour", cbCombatRef, -26)
 
   cbReactiveRef = MakeCheckbox(
@@ -805,7 +823,7 @@ local function CreateSettingsPanel()
     end
   )
 
-  -- NEW: Ring size slider
+  -- Ring size slider
   do
     local sizeLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     sizeLabel:SetPoint("TOPLEFT", cbReactiveRef, "BOTTOMLEFT", 0, -12)
@@ -833,17 +851,14 @@ local function CreateSettingsPanel()
     end
 
     local sliderLock = false
-
     sizeSliderRef:SetScript("OnValueChanged", function(self, value)
       if sliderLock then return end
 
       value = tonumber(value) or DEFAULTS.size
-
-      -- Snap to authored sizes
       local snappedKey = NearestKey(RING_TEX_BY_SIZE, value) or 96
 
       sliderLock = true
-      self:SetValue(snappedKey) -- visually snap the knob
+      self:SetValue(snappedKey)
       sliderLock = false
 
       HelloCursorDB.size = snappedKey
@@ -869,9 +884,7 @@ local function CreateSettingsPanel()
 
   MakeSeparator(cbGCDRef, -14)
 
-  -- =========================
   -- Colour
-  -- =========================
   local colHeader = MakeHeader("Colour", cbGCDRef, -26)
 
   cbClassRef = MakeCheckbox(
@@ -938,9 +951,7 @@ local function CreateSettingsPanel()
 
   MakeSeparator(hint, -14)
 
-  -- =========================
   -- Utilities
-  -- =========================
   local utilHeader = MakeHeader("Utilities", hint, -26)
 
   local defaultsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -958,9 +969,7 @@ local function CreateSettingsPanel()
   local category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
   Settings.RegisterAddOnCategory(category)
 
-  -- Sync all UI values the first time the panel is opened.
   RefreshOptionsUI()
-
   return category
 end
 
@@ -976,8 +985,6 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-
--- Keep GCD spinner responsive
 eventFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 eventFrame:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
 
@@ -987,7 +994,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
     HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
-    -- Capture cursor early so "freeze on RMB" has a good anchor even before the ring is visible
     CaptureCursorNow()
 
     RefreshVisualsImmediate()
