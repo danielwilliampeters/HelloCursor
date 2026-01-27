@@ -728,25 +728,62 @@ local function CreateSettingsPanel()
   local panel = CreateFrame("Frame")
   panel.name = "HelloCursor"
 
-  local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+  -- Scroll container
+  local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
+  scrollFrame:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", 0, 0)
+
+  -- Scroll child (ALL controls must be parented to this)
+  local content = CreateFrame("Frame", nil, scrollFrame)
+  scrollFrame:SetScrollChild(content)
+
+  -- ✅ IMPORTANT: give content a real size immediately (prevents "no content")
+  content:SetSize(560, 1)
+  content:SetPoint("TOPLEFT", 0, 0)
+  content:SetPoint("TOPRIGHT", 0, 0)
+
+  local function UpdateContentHeight(lastWidget, bottomPadding)
+    bottomPadding = bottomPadding or 24
+    if not lastWidget then
+      content:SetHeight(1)
+      return
+    end
+
+    local top = content:GetTop()
+    local bottom = lastWidget:GetBottom()
+    if not top or not bottom then return end
+
+    local h = (top - bottom) + bottomPadding
+    if h < 1 then h = 1 end
+    content:SetHeight(h)
+  end
+
+  local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 16, -16)
   title:SetText("HelloCursor")
 
-  local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
   subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
   subtitle:SetText("Cursor ring settings")
 
   local function MakeHeader(text, anchor, yOff)
-    local h = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    local h = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     h:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOff)
     h:SetText(text)
     return h
   end
 
   local function MakeCheckbox(label, get, set, anchor, yOff, onChange)
-    local cb = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    local cb = CreateFrame("CheckButton", nil, content, "UICheckButtonTemplate")
     cb:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOff)
-    cb.Text:SetText(label)
+
+    -- ✅ template text differs a bit across clients, be defensive
+    if cb.Text then
+      cb.Text:SetText(label)
+    else
+      local t = _G[cb:GetName() .. "Text"]
+      if t then t:SetText(label) end
+    end
 
     cb:SetScript("OnShow", function()
       cb:SetChecked(get() and true or false)
@@ -756,20 +793,23 @@ local function CreateSettingsPanel()
       set(self:GetChecked() and true or false)
       if onChange then onChange() end
       UpdateVisibility()
+      UpdateGCDSpinner()
     end)
 
     return cb
   end
 
   local function MakeSeparator(anchor, yOff)
-    local sep = panel:CreateTexture(nil, "ARTWORK")
+    local sep = content:CreateTexture(nil, "ARTWORK")
     sep:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -16, yOff)
     sep:SetSize(560, 1)
     sep:SetColorTexture(0.25, 0.25, 0.25, 0.8)
     return sep
   end
 
+  -- =========================
   -- Visibility
+  -- =========================
   local visHeader = MakeHeader("Visibility", subtitle, -18)
 
   cbWorldRef = MakeCheckbox(
@@ -806,7 +846,9 @@ local function CreateSettingsPanel()
 
   MakeSeparator(cbCombatRef, -14)
 
+  -- =========================
   -- Behaviour
+  -- =========================
   local behHeader = MakeHeader("Behaviour", cbCombatRef, -26)
 
   cbReactiveRef = MakeCheckbox(
@@ -819,27 +861,43 @@ local function CreateSettingsPanel()
       StopTween()
       SnapToTargetMix()
       SetSpinnerSwipeTextureForMix(nil)
-      UpdateGCDSpinner()
     end
   )
 
-  -- Ring size slider
+  cbGCDRef = MakeCheckbox(
+    "Show global cooldown spinner on cursor",
+    function() return HelloCursorDB.showGCDSpinner end,
+    function(v) HelloCursorDB.showGCDSpinner = v end,
+    cbReactiveRef,
+    -10,
+    function()
+      ApplyTintIfNeeded(true)
+    end
+  )
+
+  MakeSeparator(cbGCDRef, -14)
+
+  -- =========================
+  -- Appearance
+  -- =========================
+  local appearanceHeader = MakeHeader("Appearance", cbGCDRef, -26)
+
+  local sizeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  sizeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 0, -12)
+  sizeLabel:SetText("Ring size")
+
+  sizeValueRef = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  sizeValueRef:SetPoint("LEFT", sizeLabel, "RIGHT", 8, 0)
+  sizeValueRef:SetText("")
+
+  sizeSliderRef = CreateFrame("Slider", "HelloCursorSizeSlider", content, "OptionsSliderTemplate")
+  sizeSliderRef:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -8)
+  sizeSliderRef:SetWidth(260)
+  sizeSliderRef:SetMinMaxValues(64, 128)
+  sizeSliderRef:SetValueStep(16)
+  sizeSliderRef:SetObeyStepOnDrag(true)
+
   do
-    local sizeLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    sizeLabel:SetPoint("TOPLEFT", cbReactiveRef, "BOTTOMLEFT", 0, -12)
-    sizeLabel:SetText("Ring size")
-
-    sizeValueRef = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    sizeValueRef:SetPoint("LEFT", sizeLabel, "RIGHT", 8, 0)
-    sizeValueRef:SetText("")
-
-    sizeSliderRef = CreateFrame("Slider", "HelloCursorSizeSlider", panel, "OptionsSliderTemplate")
-    sizeSliderRef:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -8)
-    sizeSliderRef:SetWidth(260)
-    sizeSliderRef:SetMinMaxValues(64, 128)
-    sizeSliderRef:SetValueStep(16)
-    sizeSliderRef:SetObeyStepOnDrag(true)
-
     local sliderName = sizeSliderRef:GetName()
     if sliderName then
       local low  = _G[sliderName .. "Low"]
@@ -849,71 +907,54 @@ local function CreateSettingsPanel()
       if high then high:SetText("128") end
       if text then text:SetText("") end
     end
-
-    local sliderLock = false
-    sizeSliderRef:SetScript("OnValueChanged", function(self, value)
-      if sliderLock then return end
-
-      value = tonumber(value) or DEFAULTS.size
-      local snappedKey = NearestKey(RING_TEX_BY_SIZE, value) or 96
-
-      sliderLock = true
-      self:SetValue(snappedKey)
-      sliderLock = false
-
-      HelloCursorDB.size = snappedKey
-      if sizeValueRef then sizeValueRef:SetText(tostring(snappedKey)) end
-
-      RefreshSize()
-      UpdateRingPosition()
-      UpdateGCDSpinner()
-    end)
   end
 
-  cbGCDRef = MakeCheckbox(
-    "Show global cooldown spinner on cursor",
-    function() return HelloCursorDB.showGCDSpinner end,
-    function(v) HelloCursorDB.showGCDSpinner = v end,
-    sizeSliderRef,
-    -16,
-    function()
-      ApplyTintIfNeeded(true)
-      UpdateGCDSpinner()
-    end
-  )
+  local sliderLock = false
+  sizeSliderRef:SetScript("OnValueChanged", function(self, value)
+    if sliderLock then return end
 
-  MakeSeparator(cbGCDRef, -14)
+    value = tonumber(value) or DEFAULTS.size
+    local snappedKey = NearestKey(RING_TEX_BY_SIZE, value) or 96
 
-  -- Colour
-  local colHeader = MakeHeader("Colour", cbGCDRef, -26)
+    sliderLock = true
+    self:SetValue(snappedKey)
+    sliderLock = false
+
+    HelloCursorDB.size = snappedKey
+    if sizeValueRef then sizeValueRef:SetText(tostring(snappedKey)) end
+
+    RefreshSize()
+    UpdateRingPosition()
+    UpdateGCDSpinner()
+  end)
 
   cbClassRef = MakeCheckbox(
     "Use class colour",
     function() return HelloCursorDB.useClassColor end,
     function(v) HelloCursorDB.useClassColor = v end,
-    colHeader,
-    -10,
+    sizeSliderRef,
+    -16,
     function()
       ApplyTintIfNeeded(true)
       RefreshColourUIEnabledState()
     end
   )
 
-  local colorLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
   colorLabel:SetPoint("TOPLEFT", cbClassRef, "BOTTOMLEFT", 0, -10)
   colorLabel:SetText("Ring colour")
 
-  pickBtnRef = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  pickBtnRef = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
   pickBtnRef:SetSize(120, 22)
   pickBtnRef:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -6)
   pickBtnRef:SetText("Pick colour...")
   pickBtnRef:SetScript("OnClick", OpenColorPicker)
 
-  local hexLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  local hexLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
   hexLabel:SetPoint("LEFT", pickBtnRef, "RIGHT", 10, 0)
   hexLabel:SetText("Hex")
 
-  hexEditBox = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+  hexEditBox = CreateFrame("EditBox", nil, content, "InputBoxTemplate")
   hexEditBox:SetSize(110, 22)
   hexEditBox:SetPoint("LEFT", hexLabel, "RIGHT", 8, 0)
   hexEditBox:SetAutoFocus(false)
@@ -944,7 +985,7 @@ local function CreateSettingsPanel()
     self:ClearFocus()
   end)
 
-  local hint = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+  local hint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
   hint:SetText("Use RRGGBB (example: FF4FD8). Class colour disables picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
@@ -954,22 +995,34 @@ local function CreateSettingsPanel()
   -- Utilities
   local utilHeader = MakeHeader("Utilities", hint, -26)
 
-  local defaultsBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  local defaultsBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
   defaultsBtn:SetSize(140, 22)
   defaultsBtn:SetPoint("TOPLEFT", utilHeader, "BOTTOMLEFT", 0, -10)
   defaultsBtn:SetText("Reset to defaults")
   defaultsBtn:SetScript("OnClick", ResetToDefaults)
 
-  local reloadBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  local reloadBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
   reloadBtn:SetSize(140, 22)
   reloadBtn:SetPoint("LEFT", defaultsBtn, "RIGHT", 10, 0)
   reloadBtn:SetText("Reload UI")
   reloadBtn:SetScript("OnClick", ReloadUI)
 
+  -- ✅ IMPORTANT: compute height AFTER the panel is actually shown (one frame later)
+  panel:HookScript("OnShow", function()
+    RefreshOptionsUI()
+    C_Timer.After(0, function()
+      if reloadBtn and reloadBtn.GetBottom then
+        UpdateContentHeight(reloadBtn, 28)
+      end
+    end)
+  end)
+
   local category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
   Settings.RegisterAddOnCategory(category)
 
+  -- Also do an initial refresh (safe)
   RefreshOptionsUI()
+
   return category
 end
 
