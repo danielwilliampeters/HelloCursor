@@ -262,6 +262,13 @@ local wasMouselooking = false
 local CURSOR_OFFSET_X = 0
 local CURSOR_OFFSET_Y = 0
 
+-- Capture cursor position on RMB-down so "freeze" is correct even if the ring was hidden
+local function CaptureCursorNow()
+  local scale = UIParent:GetEffectiveScale()
+  local cx, cy = GetCursorPosition()
+  lastCursorX, lastCursorY = (cx / scale), (cy / scale)
+end
+
 local function UpdateRingPosition()
   local scale = UIParent:GetEffectiveScale()
   local cx, cy = GetCursorPosition()
@@ -272,7 +279,7 @@ local function UpdateRingPosition()
   if not mouselooking then
     lastCursorX, lastCursorY = cx, cy
   elseif not wasMouselooking then
-    -- just entered mouselook, freeze at last known cursor
+    -- just entered mouselook, freeze at last known cursor (captured on RMB down if ring was hidden)
     if not lastCursorX or not lastCursorY then
       lastCursorX, lastCursorY = cx, cy
     end
@@ -306,6 +313,10 @@ end
 
 local function UpdateVisibility()
   if ShouldShowRing() then
+    -- Safety: if we're already mouselooking and we never captured a position yet, do it once.
+    if (IsMouselooking and IsMouselooking()) and (not lastCursorX or not lastCursorY) then
+      CaptureCursorNow()
+    end
     ringFrame:Show()
   else
     ringFrame:Hide()
@@ -342,6 +353,15 @@ ringFrame:SetScript("OnUpdate", function()
 
   UpdateRingPosition()
 end)
+
+-- Hook RMB down once the UI is ready (captures cursor before mouselook clamps it)
+if WorldFrame and WorldFrame.HookScript then
+  WorldFrame:HookScript("OnMouseDown", function(_, button)
+    if button == "RightButton" then
+      CaptureCursorNow()
+    end
+  end)
+end
 
 -- ---------------------------------------------------------------------
 -- Color picker (Retail-safe)
@@ -641,6 +661,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     -- Ensure textures are present
     SafeSetTexture(ringTexNormal, TEX_NORMAL, nil)
     SafeSetTexture(ringTexSmall, TEX_SMALL, TEX_NORMAL)
+
+    -- Capture cursor early so "freeze on RMB" has a good anchor even before the ring is visible
+    CaptureCursorNow()
 
     RefreshVisualsImmediate()
     UpdateVisibility()
