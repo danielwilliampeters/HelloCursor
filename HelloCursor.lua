@@ -598,6 +598,22 @@ local function CreateSettingsPanel()
   defaultsBtn:SetText("Reset to defaults")
   defaultsBtn:SetScript("OnClick", ResetToDefaults)
 
+  local separator = panel:CreateTexture(nil, "ARTWORK")
+  separator:SetPoint("TOPLEFT", defaultsBtn, "BOTTOMLEFT", -16, -16)
+  separator:SetSize(560, 1)
+  separator:SetColorTexture(0.3, 0.3, 0.3, 0.8)
+
+  local reloadNote = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  reloadNote:SetPoint("TOPLEFT", separator, "BOTTOMLEFT", 16, -12)
+  reloadNote:SetText("Note: Some changes may require a UI reload to take full effect")
+  reloadNote:SetTextColor(1, 0.5, 0.25)
+
+  local btn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+  btn:SetSize(140, 22)
+  btn:SetPoint("TOPLEFT", reloadNote, "BOTTOMLEFT", 0, -12)
+  btn:SetText("Reload UI")
+  btn:SetScript("OnClick", ReloadUI)
+
   local category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
   Settings.RegisterAddOnCategory(category)
   return category
