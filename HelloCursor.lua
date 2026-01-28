@@ -25,6 +25,9 @@ local DEFAULTS = {
   showPvP = true,           -- battlegrounds / arena
   showInCombat = true,      -- override: show anywhere while in combat
 
+  -- Menus
+  hideInMenus = true,      -- when true, hide the ring while game menus are open
+
   -- Behaviour
   reactiveCursor = true,    -- crossfade to small ring while mouselooking
 
@@ -165,6 +168,21 @@ end
 -- Visibility rules
 -- ---------------------------------------------------------------------
 
+local function IsAnyMenuOpen()
+  -- Main ESC menu
+  if GameMenuFrame and GameMenuFrame:IsShown() then return true end
+
+  -- Dragonflight settings panel
+  if SettingsPanel and SettingsPanel:IsShown() then return true end
+
+  -- Older options frames (still present on some clients)
+  if InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then return true end
+  if VideoOptionsFrame and VideoOptionsFrame:IsShown() then return true end
+  if AudioOptionsFrame and AudioOptionsFrame:IsShown() then return true end
+
+  return false
+end
+
 local function IsAllowedInZone()
   if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
     return true
@@ -183,7 +201,15 @@ local function IsAllowedInZone()
 end
 
 local function ShouldShowRing()
-  return HelloCursorDB.enabled and IsAllowedInZone()
+  if not HelloCursorDB.enabled then
+    return false
+  end
+
+  if HelloCursorDB.hideInMenus and IsAnyMenuOpen() then
+    return false
+  end
+
+  return IsAllowedInZone()
 end
 
 -- ---------------------------------------------------------------------
@@ -573,6 +599,15 @@ local function UpdateVisibility()
   end
 end
 
+-- Always-on driver to re-evaluate visibility each frame so that
+-- menu open/close and zone changes immediately affect the ring
+-- without relying solely on game events. This frame itself is
+-- never hidden, unlike the ring frame.
+local visibilityDriver = CreateFrame("Frame")
+visibilityDriver:SetScript("OnUpdate", function()
+  UpdateVisibility()
+end)
+
 -- ---------------------------------------------------------------------
 -- OnUpdate loop
 -- ---------------------------------------------------------------------
@@ -612,7 +647,7 @@ local pickBtnRef
 local cbClassRef
 
 local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
-local cbGCDRef
+local cbGCDRef, cbHideMenusRef
 
 local sizeSliderRef
 local sizeValueRef
@@ -646,6 +681,7 @@ local function RefreshOptionsUI()
   if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
   if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
   if cbGCDRef then cbGCDRef:SetChecked(HelloCursorDB.showGCDSpinner and true or false) end
+  if cbHideMenusRef then cbHideMenusRef:SetChecked(HelloCursorDB.hideInMenus and true or false) end
   if cbClassRef then cbClassRef:SetChecked(HelloCursorDB.useClassColor and true or false) end
 
   if hexEditBox then
@@ -656,7 +692,6 @@ local function RefreshOptionsUI()
     local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
     local snappedKey = NearestKey(RING_TEX_BY_SIZE, v) or 96
     sizeSliderRef:SetValue(snappedKey)
-    if sizeValueRef then sizeValueRef:SetText(tostring(snappedKey)) end
   end
 
   RefreshColourUIEnabledState()
@@ -853,18 +888,24 @@ local function CreateSettingsPanel()
     end
   )
 
-  MakeSeparator(cbGCDRef, -14)
+  cbHideMenusRef = MakeCheckbox(
+    "Hide ring while game menus are open",
+    function() return HelloCursorDB.hideInMenus end,
+    function(v) HelloCursorDB.hideInMenus = v end,
+    cbGCDRef, -10,
+    function()
+      UpdateVisibility()
+    end
+  )
+
+  MakeSeparator(cbHideMenusRef, -14)
 
   -- Appearance
-  local appearanceHeader = MakeHeader("Appearance", cbGCDRef, -26)
+  local appearanceHeader = MakeHeader("Appearance", cbHideMenusRef, -26)
 
   local sizeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
   sizeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 0, -12)
   sizeLabel:SetText("Ring size")
-
-  sizeValueRef = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  sizeValueRef:SetPoint("LEFT", sizeLabel, "RIGHT", 8, 0)
-  sizeValueRef:SetText("")
 
   sizeSliderRef = CreateFrame("Slider", "HelloCursorSizeSlider", content, "OptionsSliderTemplate")
   sizeSliderRef:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -8)
@@ -897,7 +938,6 @@ local function CreateSettingsPanel()
     sliderLock = false
 
     HelloCursorDB.size = snappedKey
-    if sizeValueRef then sizeValueRef:SetText(tostring(snappedKey)) end
 
     RefreshSize()
     UpdateRingPosition()
