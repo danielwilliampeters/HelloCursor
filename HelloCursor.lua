@@ -55,7 +55,7 @@ local RING_SMALL_TEX_BY_SIZE = {
 
 local TWEEN_DURATION = 0.08
 local GCD_SPELL_ID = 61304 -- "Global Cooldown"
-local GCD_POP_CHECK_INTERVAL = 0.05 -- throttle GCD pop polling (seconds)
+local GCD_POP_CHECK_INTERVAL = 0.02 -- legacy; no longer used for throttling, kept for backwards compat
 
 -- Pop at end of GCD (a quick scale pulse on the ring frame)
 local GCD_POP_ENABLED   = true
@@ -205,6 +205,32 @@ ringTexSmall:SetAllPoints(true)
 SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[96], nil)
 SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[96], RING_TEX_BY_SIZE[96])
 
+-- GCD spinners (normal + small), crossfaded like the ring
+local gcdSpinnerNormal = CreateFrame("Cooldown", nil, ringFrame, "CooldownFrameTemplate")
+gcdSpinnerNormal:SetAllPoints(true)
+gcdSpinnerNormal:SetFrameLevel(ringFrame:GetFrameLevel() + 5)
+gcdSpinnerNormal:Hide()
+
+local gcdSpinnerSmall = CreateFrame("Cooldown", nil, ringFrame, "CooldownFrameTemplate")
+gcdSpinnerSmall:SetAllPoints(true)
+gcdSpinnerSmall:SetFrameLevel(ringFrame:GetFrameLevel() + 5)
+gcdSpinnerSmall:Hide()
+
+local function SetupSpinner(f)
+  if f.SetHideCountdownNumbers then f:SetHideCountdownNumbers(true) end
+  if f.SetDrawBling then f:SetDrawBling(false) end
+  if f.SetDrawEdge then f:SetDrawEdge(false) end
+end
+
+SetupSpinner(gcdSpinnerNormal)
+SetupSpinner(gcdSpinnerSmall)
+if gcdSpinnerNormal.SetSwipeTexture then
+  gcdSpinnerNormal:SetSwipeTexture(RING_TEX_BY_SIZE[96])
+end
+if gcdSpinnerSmall.SetSwipeTexture then
+  gcdSpinnerSmall:SetSwipeTexture(RING_SMALL_TEX_BY_SIZE[96])
+end
+
 -- ---------------------------------------------------------------------
 -- Colour (class colour or hex)
 -- ---------------------------------------------------------------------
@@ -252,6 +278,12 @@ local function ApplyTintIfNeeded(force)
   if force or key ~= lastTintKey then
     ringTexNormal:SetVertexColor(r, g, b, a)
     ringTexSmall:SetVertexColor(r, g, b, a)
+    if gcdSpinnerNormal and gcdSpinnerNormal.SetSwipeColor then
+      gcdSpinnerNormal:SetSwipeColor(r, g, b, a or 1)
+    end
+    if gcdSpinnerSmall and gcdSpinnerSmall.SetSwipeColor then
+      gcdSpinnerSmall:SetSwipeColor(r, g, b, a or 1)
+    end
     lastTintKey = key
   end
 end
@@ -265,9 +297,9 @@ local WantsSmallRing -- forward decl
 local SetMix         -- forward decl
 
 local lastTexKey = 96
-local lastGCDCheckTime = 0
 local lastGCDRemaining = 0
 local lastGCDBusy = false
+local gcdVisualActive = false -- when true, spinner replaces the ring visuals
 
 -- ---------------------------------------------------------------------
 -- GCD end pop
@@ -306,11 +338,6 @@ local function CheckGCDPop()
   end
 
   local now = GetTime()
-  if (now - lastGCDCheckTime) < GCD_POP_CHECK_INTERVAL then
-    return
-  end
-  lastGCDCheckTime = now
-
   local startTime, duration, enabled = GetSpellCooldownCompat(GCD_SPELL_ID)
   local gcdActive = false
   local remaining = 0
@@ -329,6 +356,34 @@ local function CheckGCDPop()
   -- while the previous one finished in between samples, e.g. via spell queue).
   if lastGCDBusy and gcdActive and (remaining > lastGCDRemaining + 0.02) then
     TriggerGCDPop()
+  end
+
+  -- Spinner / ring base visibility
+  local wantSpinner = HelloCursorDB.showGCDSpinner and gcdActive
+
+  if wantSpinner then
+    if gcdSpinnerNormal and gcdSpinnerNormal.SetCooldown then
+      gcdSpinnerNormal:SetCooldown(startTime, duration)
+      gcdSpinnerNormal:Show()
+    end
+    if gcdSpinnerSmall and gcdSpinnerSmall.SetCooldown then
+      gcdSpinnerSmall:SetCooldown(startTime, duration)
+      gcdSpinnerSmall:Show()
+    end
+  else
+    if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
+    if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
+  end
+
+  gcdVisualActive = wantSpinner
+
+  if not gcdVisualActive then
+    -- restore ring visuals according to the current mix
+    SetMix(currentMix)
+  else
+    -- ensure the base ring is hidden so the spinner fully replaces it
+    ringTexNormal:SetAlpha(0)
+    ringTexSmall:SetAlpha(0)
   end
 
   lastGCDBusy = gcdActive
@@ -360,6 +415,36 @@ SetMix = function(mix)
   -- Never hard-hide textures. Alpha-only = no flicker.
   ringTexNormal:Show()
   ringTexSmall:Show()
+
+  if gcdVisualActive then
+    -- While the GCD spinner is visually active, keep the base ring
+    -- fully hidden so the spinner "replaces" it, and crossfade
+    -- between the normal/small spinner visuals using the same mix.
+    ringTexNormal:SetAlpha(0)
+    ringTexSmall:SetAlpha(0)
+
+    if gcdSpinnerNormal then
+      if mix <= 0.0001 then
+        gcdSpinnerNormal:SetAlpha(1)
+      elseif mix >= 0.9999 then
+        gcdSpinnerNormal:SetAlpha(0)
+      else
+        gcdSpinnerNormal:SetAlpha(1 - mix)
+      end
+    end
+
+    if gcdSpinnerSmall then
+      if mix <= 0.0001 then
+        gcdSpinnerSmall:SetAlpha(0)
+      elseif mix >= 0.9999 then
+        gcdSpinnerSmall:SetAlpha(1)
+      else
+        gcdSpinnerSmall:SetAlpha(mix)
+      end
+    end
+
+    return
+  end
 
   if mix <= 0.0001 then
     ringTexNormal:SetAlpha(1)
@@ -451,6 +536,14 @@ local function RefreshSize()
   -- update ring textures
   SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[key], RING_TEX_BY_SIZE[96])
   SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[key], RING_SMALL_TEX_BY_SIZE[96])
+
+  -- update spinner swipe textures to match the current ring size
+  if gcdSpinnerNormal and gcdSpinnerNormal.SetSwipeTexture then
+    gcdSpinnerNormal:SetSwipeTexture(RING_TEX_BY_SIZE[key])
+  end
+  if gcdSpinnerSmall and gcdSpinnerSmall.SetSwipeTexture then
+    gcdSpinnerSmall:SetSwipeTexture(RING_SMALL_TEX_BY_SIZE[key] or RING_TEX_BY_SIZE[key])
+  end
 
   lastTexKey = key
 
