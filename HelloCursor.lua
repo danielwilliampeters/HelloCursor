@@ -760,7 +760,7 @@ local function CreateSettingsPanel()
   )
 
   cbGCDRef = MakeCheckbox(
-    "Play global cooldown pop on cursor",
+    "Global cooldown (GCD) animation",
     function() return HelloCursorDB.showGCDSpinner end,
     function(v) HelloCursorDB.showGCDSpinner = v end,
     cbReactiveRef, -10,
