@@ -275,12 +275,12 @@ local SetMix         -- forward decl
 
 local lastTexKey = 96
 local lastGCDCheckTime = 0
+local lastGCDRemaining = 0
+local lastGCDBusy = false
 
 -- ---------------------------------------------------------------------
--- GCD spinner + GCD end pop
+-- GCD end pop
 -- ---------------------------------------------------------------------
-
-local gcdWasActive = false
 
 local gcdPopAnim = ringFrame:CreateAnimationGroup()
 
@@ -311,30 +311,37 @@ end
 
 local function CheckGCDPop()
   if not HelloCursorDB.showGCDSpinner then
-    gcdWasActive = false
     return
   end
 
-  local startTime, duration, enabled = GetSpellCooldownCompat(GCD_SPELL_ID)
   local now = GetTime()
-
-  -- Throttle cooldown polling to avoid doing this every frame
   if (now - lastGCDCheckTime) < GCD_POP_CHECK_INTERVAL then
     return
   end
   lastGCDCheckTime = now
 
-  local gcdActiveNow = false
+  local startTime, duration, enabled = GetSpellCooldownCompat(GCD_SPELL_ID)
+  local gcdActive = false
+  local remaining = 0
+
   if enabled ~= 0 and duration and duration > 0 and startTime and startTime > 0 then
-    local remaining = (startTime + duration) - now
-    gcdActiveNow = remaining > 0
+    remaining = (startTime + duration) - now
+    gcdActive = remaining > 0
   end
 
-  if gcdWasActive and (not gcdActiveNow) then
+  -- Case 1: GCD was busy and now became idle -> pop.
+  if lastGCDBusy and (not gcdActive) then
     TriggerGCDPop()
   end
 
-  gcdWasActive = gcdActiveNow
+  -- Case 2: GCD stayed busy but remaining jumped up (new GCD started
+  -- while the previous one finished in between samples, e.g. via spell queue).
+  if lastGCDBusy and gcdActive and (remaining > lastGCDRemaining + 0.02) then
+    TriggerGCDPop()
+  end
+
+  lastGCDBusy = gcdActive
+  lastGCDRemaining = remaining
 end
 
 -- ---------------------------------------------------------------------
