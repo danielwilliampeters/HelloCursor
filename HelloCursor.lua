@@ -1,13 +1,4 @@
--- HelloCursor
--- Asset-based cursor ring (tintable), with optional reactive crossfade to a smaller ring on RMB (mouselook).
--- Ring follows cursor normally and FREEZES at last cursor position when mouselook starts (RMB).
---
--- OPTIONAL:
---   Global Cooldown spinner around the cursor ring (CooldownFrame swipe using the same ring texture).
---
--- REQUIRED FILES:
---   Interface/AddOns/HelloCursor/ring_64.tga ... ring_128.tga
---   Interface/AddOns/HelloCursor/ring_small_64.tga ... ring_small_128.tga
+-- HelloCursor: cursor ring addon (Retail)
 
 local ADDON_NAME = ...
 local VERSION = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "dev"
