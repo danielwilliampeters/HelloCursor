@@ -405,7 +405,7 @@ local function CheckGCDPop()
 
   if not gcdVisualActive then
     -- restore ring visuals according to the current mix
-    SetMix(currentMix)
+    if SetMix then SetMix(currentMix) end
   else
     -- ensure the base ring is hidden so the spinner fully replaces it
     ringTexNormal:SetAlpha(0)
@@ -599,13 +599,18 @@ local function UpdateVisibility()
   end
 end
 
--- Always-on driver to re-evaluate visibility each frame so that
--- menu open/close and zone changes immediately affect the ring
--- without relying solely on game events. This frame itself is
+-- Always-on driver to re-evaluate visibility periodically so menu open/close
+-- affects the ring without relying only on game events. This frame itself is
 -- never hidden, unlike the ring frame.
 local visibilityDriver = CreateFrame("Frame")
-visibilityDriver:SetScript("OnUpdate", function()
-  UpdateVisibility()
+local visElapsed = 0
+visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
+  if not HelloCursorDB.hideInMenus then return end
+  visElapsed = visElapsed + (elapsed or 0)
+  if visElapsed >= 0.05 then
+    visElapsed = 0
+    UpdateVisibility()
+  end
 end)
 
 -- ---------------------------------------------------------------------
