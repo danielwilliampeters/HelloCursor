@@ -82,6 +82,7 @@ local function CopyDefaults(dst, src)
 end
 
 local function Clamp(n, lo, hi)
+  n = tonumber(n) or lo
   if n < lo then return lo end
   if n > hi then return hi end
   return n
@@ -573,19 +574,24 @@ local function RefreshSize()
   ringFrame:SetSize(RING_CANVAS_SIZE, RING_CANVAS_SIZE)
 
   local key = NearestKey(RING_TEX_BY_SIZE, size) or 96
-  if key == lastTexKey then return end
 
-  -- update ring textures
-  SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[key], RING_TEX_BY_SIZE[96])
-  SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[key], RING_SMALL_TEX_BY_SIZE[96])
-
-  -- update spinner swipe textures to match the current ring size
+  -- Always keep spinner swipe textures correct (even if key is unchanged)
   if gcdSpinnerNormal and gcdSpinnerNormal.SetSwipeTexture then
     gcdSpinnerNormal:SetSwipeTexture(RING_TEX_BY_SIZE[key])
   end
   if gcdSpinnerSmall and gcdSpinnerSmall.SetSwipeTexture then
     gcdSpinnerSmall:SetSwipeTexture(RING_SMALL_TEX_BY_SIZE[key] or RING_TEX_BY_SIZE[key])
   end
+
+  -- If the authored size didn't change, we can stop here
+  if key == lastTexKey then
+    ApplyTintIfNeeded(false) -- optional, cheap; keeps swipe color consistent
+    return
+  end
+
+  -- update ring textures
+  SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[key], RING_TEX_BY_SIZE[96])
+  SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[key], RING_SMALL_TEX_BY_SIZE[96])
 
   lastTexKey = key
 
@@ -721,7 +727,10 @@ end
 local function SetColorHex(hex)
   local norm = NormalizeHex(hex)
   if not norm then return end
+
   HelloCursorDB.colorHex = norm
+  HelloCursorDB["HelloCursor_colorHex"] = norm -- ✅ keep Settings-backed value in sync
+
   ApplyTintIfNeeded(true)
   if hexEditBox then hexEditBox:SetText(norm) end
 end
@@ -764,30 +773,30 @@ local function ResetToDefaults()
   for k, v in pairs(DEFAULTS) do
     HelloCursorDB[k] = v
   end
+
   HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
   HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
-  -- Keep any Settings-backed (namespaced) variables in sync so that the
-  -- Blizzard Settings slider/checkbox values match the DB defaults on
-  -- reload. These are created as "HelloCursor_" .. key.
-  if HelloCursorDB then
-    local tracked = {
-      "enabled",
-      "showWorld",
-      "showPvE",
-      "showPvP",
-      "showInCombat",
-      "reactiveCursor",
-      "showGCDSpinner",
-      "hideInMenus",
-      "size",
-      "useClassColor",
-    }
-    for _, key in ipairs(tracked) do
-      local nsKey = "HelloCursor_" .. key
-      if HelloCursorDB[key] ~= nil then
-        HelloCursorDB[nsKey] = HelloCursorDB[key]
-      end
+  -- Keep Settings-backed (namespaced) variables in sync so the Blizzard
+  -- Settings controls match defaults on reload.
+  local tracked = {
+    "enabled",
+    "showWorld",
+    "showPvE",
+    "showPvP",
+    "showInCombat",
+    "reactiveCursor",
+    "showGCDSpinner",
+    "hideInMenus",
+    "size",
+    "useClassColor",
+    "colorHex", -- ✅ add this
+  }
+
+  for _, key in ipairs(tracked) do
+    local nsKey = "HelloCursor_" .. key
+    if HelloCursorDB[key] ~= nil then
+      HelloCursorDB[nsKey] = HelloCursorDB[key]
     end
   end
 
@@ -1146,25 +1155,45 @@ local function CreateSettingsPanel()
 
   local function OnChangedFor(key, setting)
     if not (Settings.SetOnValueChangedCallback and setting and setting.GetValue) then return end
+
     local varName = HC_VAR_PREFIX .. key
+
+    -- Guard against re-entrant callbacks (Reset to defaults can cause cascades)
+    local inCallback = false
+
     Settings.SetOnValueChangedCallback(varName, function()
+      if inCallback then return end
+      inCallback = true
+
       local value = setting:GetValue()
+
+      -- keep both in sync
+      HelloCursorDB[varName] = value
       HelloCursorDB[key] = value
 
       if key == "size" then
+        -- Snap our stored value, but DO NOT call setting:SetValue() here
+        -- (that can recurse during "Reset to defaults" and blow the stack).
         local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
         local snappedKey = NearestKey(RING_TEX_BY_SIZE, v) or 96
+
         HelloCursorDB.size = snappedKey
+        HelloCursorDB[varName] = snappedKey
+
         RefreshSize()
         UpdateRingPosition()
+
       elseif key == "useClassColor" or key == "colorHex" then
         ApplyTintIfNeeded(true)
         RefreshColourUIEnabledState()
+
       elseif key == "reactiveCursor" then
         StopTween()
         SnapToTargetMix()
+
       elseif key == "showGCDSpinner" then
         ApplyTintIfNeeded(true)
+
       elseif key == "showWorld"
         or key == "showPvE"
         or key == "showPvP"
@@ -1173,6 +1202,8 @@ local function CreateSettingsPanel()
         or key == "enabled" then
         UpdateVisibility()
       end
+
+      inCallback = false
     end)
   end
 
@@ -1204,7 +1235,8 @@ local function CreateSettingsPanel()
     if current > maxValue then current = maxValue end
     HelloCursorDB[key] = current
 
-    local setting = RegisterSetting(key, name, current)
+    -- ✅ important: use the true default, not the current value
+    local setting = RegisterSetting(key, name, DEFAULTS[key] or current)
     OnChangedFor(key, setting)
 
     if Settings.CreateSliderOptions and Settings.CreateSlider then
