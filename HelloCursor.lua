@@ -200,8 +200,24 @@ local function IsAllowedInZone()
   return HelloCursorDB.showPvE
 end
 
+local function IsAddonEnabled()
+  -- Prefer the Settings-backed namespaced value if it exists, to ensure
+  -- the Blizzard Settings checkbox always wins. Mirror it back into the
+  -- plain DB field so the rest of the addon has a single source of truth.
+  local nsKey = "HelloCursor_enabled"
+  local enabled = HelloCursorDB.enabled
+  if type(HelloCursorDB[nsKey]) == "boolean" then
+    enabled = HelloCursorDB[nsKey]
+  end
+  if enabled == nil then
+    enabled = DEFAULTS.enabled and true or false
+  end
+  HelloCursorDB.enabled = enabled
+  return enabled
+end
+
 local function ShouldShowRing()
-  if not HelloCursorDB.enabled then
+  if not IsAddonEnabled() then
     return false
   end
 
@@ -644,7 +660,7 @@ ringFrame:SetScript("OnUpdate", function()
 end)
 
 -- ---------------------------------------------------------------------
--- Settings UI (left functionally identical; only minimal tidy-ups)
+-- Settings UI (Blizzard Settings panel)
 -- ---------------------------------------------------------------------
 
 local hexEditBox
@@ -751,12 +767,40 @@ local function ResetToDefaults()
   HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
   HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
 
+  -- Keep any Settings-backed (namespaced) variables in sync so that the
+  -- Blizzard Settings slider/checkbox values match the DB defaults on
+  -- reload. These are created as "HelloCursor_" .. key.
+  if HelloCursorDB then
+    local tracked = {
+      "enabled",
+      "showWorld",
+      "showPvE",
+      "showPvP",
+      "showInCombat",
+      "reactiveCursor",
+      "showGCDSpinner",
+      "hideInMenus",
+      "size",
+      "useClassColor",
+    }
+    for _, key in ipairs(tracked) do
+      local nsKey = "HelloCursor_" .. key
+      if HelloCursorDB[key] ~= nil then
+        HelloCursorDB[nsKey] = HelloCursorDB[key]
+      end
+    end
+  end
+
   RefreshVisualsImmediate()
   UpdateVisibility()
   RefreshOptionsUI()
 end
 
-local function CreateSettingsPanel()
+-- Legacy canvas-style panel. On modern clients this is registered as an
+-- "advanced" sub-category underneath the vertical layout category so we
+-- can keep the richer colour + utilities UI. When used as a top-level
+-- category (older clients), it also shows the full set of toggles.
+local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   if not Settings or not Settings.RegisterCanvasLayoutCategory then return nil end
 
   local panel = CreateFrame("Frame")
@@ -795,7 +839,7 @@ local function CreateSettingsPanel()
 
   local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
   subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-  subtitle:SetText("Cursor ring settings")
+  subtitle:SetText("Advanced settings")
 
   local function MakeHeader(text, anchor, yOff)
     local h = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -836,131 +880,137 @@ local function CreateSettingsPanel()
     return sep
   end
 
-  -- Visibility
-  local visHeader = MakeHeader("Visibility", subtitle, -18)
+  local previousAnchor = subtitle
 
-  cbWorldRef = MakeCheckbox(
-    "Show in world",
-    function() return HelloCursorDB.showWorld end,
-    function(v) HelloCursorDB.showWorld = v end,
-    visHeader, -10
-  )
+  if not isAdvanced then
+    -- Visibility
+    local visHeader = MakeHeader("Visibility", subtitle, -18)
 
-  cbPvERef = MakeCheckbox(
-    "Show in dungeons / delves / raids",
-    function() return HelloCursorDB.showPvE end,
-    function(v) HelloCursorDB.showPvE = v end,
-    cbWorldRef, -10
-  )
+    cbWorldRef = MakeCheckbox(
+      "Show in world",
+      function() return HelloCursorDB.showWorld end,
+      function(v) HelloCursorDB.showWorld = v end,
+      visHeader, -10
+    )
 
-  cbPvPRef = MakeCheckbox(
-    "Show in battlegrounds / arena",
-    function() return HelloCursorDB.showPvP end,
-    function(v) HelloCursorDB.showPvP = v end,
-    cbPvERef, -10
-  )
+    cbPvERef = MakeCheckbox(
+      "Show in dungeons / delves / raids",
+      function() return HelloCursorDB.showPvE end,
+      function(v) HelloCursorDB.showPvE = v end,
+      cbWorldRef, -10
+    )
 
-  cbCombatRef = MakeCheckbox(
-    "Show in combat",
-    function() return HelloCursorDB.showInCombat end,
-    function(v) HelloCursorDB.showInCombat = v end,
-    cbPvPRef, -10
-  )
+    cbPvPRef = MakeCheckbox(
+      "Show in battlegrounds / arena",
+      function() return HelloCursorDB.showPvP end,
+      function(v) HelloCursorDB.showPvP = v end,
+      cbPvERef, -10
+    )
 
-  MakeSeparator(cbCombatRef, -14)
+    cbCombatRef = MakeCheckbox(
+      "Show in combat",
+      function() return HelloCursorDB.showInCombat end,
+      function(v) HelloCursorDB.showInCombat = v end,
+      cbPvPRef, -10
+    )
 
-  -- Behaviour
-  local behHeader = MakeHeader("Behaviour", cbCombatRef, -26)
+    MakeSeparator(cbCombatRef, -14)
 
-  cbReactiveRef = MakeCheckbox(
-    "Reactive cursor (shrink while holding RMB)",
-    function() return HelloCursorDB.reactiveCursor end,
-    function(v) HelloCursorDB.reactiveCursor = v end,
-    behHeader, -10,
-    function()
-      StopTween()
-      SnapToTargetMix()
+    -- Behaviour
+    local behHeader = MakeHeader("Behaviour", cbCombatRef, -26)
+
+    cbReactiveRef = MakeCheckbox(
+      "Reactive cursor (shrink while holding RMB)",
+      function() return HelloCursorDB.reactiveCursor end,
+      function(v) HelloCursorDB.reactiveCursor = v end,
+      behHeader, -10,
+      function()
+        StopTween()
+        SnapToTargetMix()
+      end
+    )
+
+    cbGCDRef = MakeCheckbox(
+      "Global cooldown (GCD) animation",
+      function() return HelloCursorDB.showGCDSpinner end,
+      function(v) HelloCursorDB.showGCDSpinner = v end,
+      cbReactiveRef, -10,
+      function()
+        ApplyTintIfNeeded(true)
+      end
+    )
+
+    cbHideMenusRef = MakeCheckbox(
+      "Hide ring while game menus are open",
+      function() return HelloCursorDB.hideInMenus end,
+      function(v) HelloCursorDB.hideInMenus = v end,
+      cbGCDRef, -10,
+      function()
+        UpdateVisibility()
+      end
+    )
+
+    MakeSeparator(cbHideMenusRef, -14)
+
+    -- Appearance (basic)
+    local appearanceHeader = MakeHeader("Appearance", cbHideMenusRef, -26)
+
+    local sizeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    sizeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 0, -12)
+    sizeLabel:SetText("Ring size")
+
+    sizeSliderRef = CreateFrame("Slider", "HelloCursorSizeSlider", content, "OptionsSliderTemplate")
+    sizeSliderRef:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -8)
+    sizeSliderRef:SetWidth(260)
+    sizeSliderRef:SetMinMaxValues(64, 128)
+    sizeSliderRef:SetValueStep(16)
+    sizeSliderRef:SetObeyStepOnDrag(true)
+
+    do
+      local sliderName = sizeSliderRef:GetName()
+      if sliderName then
+        local low  = _G[sliderName .. "Low"]
+        local high = _G[sliderName .. "High"]
+        local text = _G[sliderName .. "Text"]
+        if low  then low:SetText("64") end
+        if high then high:SetText("128") end
+        if text then text:SetText("") end
+      end
     end
-  )
 
-  cbGCDRef = MakeCheckbox(
-    "Global cooldown (GCD) animation",
-    function() return HelloCursorDB.showGCDSpinner end,
-    function(v) HelloCursorDB.showGCDSpinner = v end,
-    cbReactiveRef, -10,
-    function()
-      ApplyTintIfNeeded(true)
-    end
-  )
+    local sliderLock = false
+    sizeSliderRef:SetScript("OnValueChanged", function(self, value)
+      if sliderLock then return end
 
-  cbHideMenusRef = MakeCheckbox(
-    "Hide ring while game menus are open",
-    function() return HelloCursorDB.hideInMenus end,
-    function(v) HelloCursorDB.hideInMenus = v end,
-    cbGCDRef, -10,
-    function()
-      UpdateVisibility()
-    end
-  )
+      value = tonumber(value) or DEFAULTS.size
+      local snappedKey = NearestKey(RING_TEX_BY_SIZE, value) or 96
 
-  MakeSeparator(cbHideMenusRef, -14)
+      sliderLock = true
+      self:SetValue(snappedKey)
+      sliderLock = false
 
-  -- Appearance
-  local appearanceHeader = MakeHeader("Appearance", cbHideMenusRef, -26)
+      HelloCursorDB.size = snappedKey
 
-  local sizeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  sizeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 0, -12)
-  sizeLabel:SetText("Ring size")
+      RefreshSize()
+      UpdateRingPosition()
+    end)
 
-  sizeSliderRef = CreateFrame("Slider", "HelloCursorSizeSlider", content, "OptionsSliderTemplate")
-  sizeSliderRef:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -8)
-  sizeSliderRef:SetWidth(260)
-  sizeSliderRef:SetMinMaxValues(64, 128)
-  sizeSliderRef:SetValueStep(16)
-  sizeSliderRef:SetObeyStepOnDrag(true)
+    cbClassRef = MakeCheckbox(
+      "Use class colour",
+      function() return HelloCursorDB.useClassColor end,
+      function(v) HelloCursorDB.useClassColor = v end,
+      sizeSliderRef, -16,
+      function()
+        ApplyTintIfNeeded(true)
+        RefreshColourUIEnabledState()
+      end
+    )
 
-  do
-    local sliderName = sizeSliderRef:GetName()
-    if sliderName then
-      local low  = _G[sliderName .. "Low"]
-      local high = _G[sliderName .. "High"]
-      local text = _G[sliderName .. "Text"]
-      if low  then low:SetText("64") end
-      if high then high:SetText("128") end
-      if text then text:SetText("") end
-    end
+    previousAnchor = cbClassRef
   end
 
-  local sliderLock = false
-  sizeSliderRef:SetScript("OnValueChanged", function(self, value)
-    if sliderLock then return end
-
-    value = tonumber(value) or DEFAULTS.size
-    local snappedKey = NearestKey(RING_TEX_BY_SIZE, value) or 96
-
-    sliderLock = true
-    self:SetValue(snappedKey)
-    sliderLock = false
-
-    HelloCursorDB.size = snappedKey
-
-    RefreshSize()
-    UpdateRingPosition()
-  end)
-
-  cbClassRef = MakeCheckbox(
-    "Use class colour",
-    function() return HelloCursorDB.useClassColor end,
-    function(v) HelloCursorDB.useClassColor = v end,
-    sizeSliderRef, -16,
-    function()
-      ApplyTintIfNeeded(true)
-      RefreshColourUIEnabledState()
-    end
-  )
-
   local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  colorLabel:SetPoint("TOPLEFT", cbClassRef, "BOTTOMLEFT", 0, -10)
+  colorLabel:SetPoint("TOPLEFT", previousAnchor, "BOTTOMLEFT", 0, -22)
   colorLabel:SetText("Ring colour")
 
   pickBtnRef = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
@@ -1009,40 +1059,252 @@ local function CreateSettingsPanel()
   hint:SetText("Use RRGGBB (example: FF4FD8). Class colour disables picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
-  MakeSeparator(hint, -14)
-
-  -- Utilities
-  local utilHeader = MakeHeader("Utilities", hint, -26)
-
+  -- Reset button sits under the Ring colour controls (no separate section)
   local defaultsBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-  defaultsBtn:SetSize(140, 22)
-  defaultsBtn:SetPoint("TOPLEFT", utilHeader, "BOTTOMLEFT", 0, -10)
+  defaultsBtn:SetSize(160, 22)
+  defaultsBtn:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -14)
   defaultsBtn:SetText("Reset to defaults")
   defaultsBtn:SetScript("OnClick", ResetToDefaults)
-
-  local reloadBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-  reloadBtn:SetSize(140, 22)
-  reloadBtn:SetPoint("LEFT", defaultsBtn, "RIGHT", 10, 0)
-  reloadBtn:SetText("Reload UI")
-  reloadBtn:SetScript("OnClick", ReloadUI)
 
   panel:HookScript("OnShow", function()
     RefreshOptionsUI()
     C_Timer.After(0, function()
-      if reloadBtn and reloadBtn.GetBottom then
-        UpdateContentHeight(reloadBtn, 28)
+      if defaultsBtn and defaultsBtn.GetBottom then
+        UpdateContentHeight(defaultsBtn, 28)
       end
     end)
   end)
 
-  local category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
-  Settings.RegisterAddOnCategory(category)
+  local category
+  if parentCategory and Settings.RegisterCanvasLayoutSubcategory and isAdvanced then
+    category = Settings.RegisterCanvasLayoutSubcategory(parentCategory, panel, "Advanced (Colour & Utilities)")
+  else
+    category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
+    Settings.RegisterAddOnCategory(category)
+  end
 
   RefreshOptionsUI()
   return category
 end
 
 local settingsCategory = nil
+
+local function CreateSettingsPanel()
+  if settingsCategory then return settingsCategory end
+  if not Settings then
+    settingsCategory = nil
+    return settingsCategory
+  end
+
+  -- If the vertical layout APIs aren't available, fall back to the
+  -- full legacy canvas panel as the top-level category.
+  if not (Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting) then
+    settingsCategory = CreateSettingsPanelLegacy(nil, false)
+    return settingsCategory
+  end
+
+  local category, layout = Settings.RegisterVerticalLayoutCategory("HelloCursor")
+  settingsCategory = category
+  Settings.RegisterAddOnCategory(category)
+
+  local HC_VAR_PREFIX = "HelloCursor_"
+
+  local function VarTypeFor(v)
+    if Settings.VarType then
+      if type(v) == "boolean" then return Settings.VarType.Boolean end
+      if type(v) == "number" then return Settings.VarType.Number end
+    end
+    return type(v)
+  end
+
+  local function RegisterSetting(key, name, defaultValue)
+    local varName = HC_VAR_PREFIX .. key
+
+    -- Seed the underlying storage from our existing DB field so the
+    -- Settings panel reflects current values instead of always defaulting.
+    if HelloCursorDB[varName] == nil then
+      if HelloCursorDB[key] ~= nil then
+        HelloCursorDB[varName] = HelloCursorDB[key]
+      else
+        HelloCursorDB[varName] = defaultValue
+      end
+    end
+
+    local ok, setting = pcall(Settings.RegisterAddOnSetting,
+      category,
+      varName,     -- variable (must be globally unique)
+      varName,     -- variableKey
+      HelloCursorDB,
+      VarTypeFor(defaultValue),
+      name,
+      defaultValue
+    )
+    if ok and setting then return setting end
+
+    error(("HelloCursor: RegisterAddOnSetting failed for %s (%s): %s"):format(key, tostring(varName), tostring(setting)))
+  end
+
+  local function OnChangedFor(key, setting)
+    if not (Settings.SetOnValueChangedCallback and setting and setting.GetValue) then return end
+    local varName = HC_VAR_PREFIX .. key
+    Settings.SetOnValueChangedCallback(varName, function()
+      local value = setting:GetValue()
+      HelloCursorDB[key] = value
+
+      if key == "size" then
+        local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
+        local snappedKey = NearestKey(RING_TEX_BY_SIZE, v) or 96
+        HelloCursorDB.size = snappedKey
+        RefreshSize()
+        UpdateRingPosition()
+      elseif key == "useClassColor" or key == "colorHex" then
+        ApplyTintIfNeeded(true)
+        RefreshColourUIEnabledState()
+      elseif key == "reactiveCursor" then
+        StopTween()
+        SnapToTargetMix()
+      elseif key == "showGCDSpinner" then
+        ApplyTintIfNeeded(true)
+      elseif key == "showWorld"
+        or key == "showPvE"
+        or key == "showPvP"
+        or key == "showInCombat"
+        or key == "hideInMenus"
+        or key == "enabled" then
+        UpdateVisibility()
+      end
+    end)
+  end
+
+  local function CreateCheckboxControl(setting, tooltip)
+    if Settings.CreateCheckbox then
+      return Settings.CreateCheckbox(category, setting, tooltip)
+    end
+    if Settings.CreateCheckBox then
+      return Settings.CreateCheckBox(category, setting, tooltip)
+    end
+  end
+
+  local function AddCheckbox(key, name, tooltip)
+    local defaultValue = DEFAULTS[key]
+    if type(defaultValue) ~= "boolean" then
+      defaultValue = HelloCursorDB[key] and true or false
+    end
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+    CreateCheckboxControl(setting, tooltip)
+    return setting
+  end
+
+  local function AddSlider(key, name, tooltip, minValue, maxValue, step)
+    local current = HelloCursorDB[key]
+    if type(current) ~= "number" then current = DEFAULTS[key] or minValue end
+    if current < minValue then current = minValue end
+    if current > maxValue then current = maxValue end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, current)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateSliderOptions and Settings.CreateSlider then
+      local opts = Settings.CreateSliderOptions(minValue, maxValue, step)
+      if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and MinimalSliderWithSteppersMixin.Label.Right then
+        opts:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
+      end
+      Settings.CreateSlider(category, setting, opts, tooltip)
+    elseif Settings.CreateSlider then
+      Settings.CreateSlider(category, setting, minValue, maxValue, step, tooltip)
+    end
+
+    return setting
+  end
+
+  local function AddHeader(text)
+    if layout and type(layout.AddInitializer) == "function"
+      and type(CreateSettingsListSectionHeaderInitializer) == "function" then
+      layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
+    end
+  end
+
+  -- General
+  AddHeader("General")
+
+  AddCheckbox(
+    "enabled",
+    "Enable HelloCursor",
+    "Master toggle for the cursor ring."
+  )
+
+  -- Visibility
+  AddHeader("Visibility")
+
+  AddCheckbox(
+    "showWorld",
+    "Show in world",
+    "Show the cursor ring in open world zones."
+  )
+
+  AddCheckbox(
+    "showPvE",
+    "Show in dungeons / delves / raids",
+    "Show the cursor ring in 5-player dungeons, delves, and raids."
+  )
+
+  AddCheckbox(
+    "showPvP",
+    "Show in battlegrounds / arena",
+    "Show the cursor ring in battlegrounds and arenas."
+  )
+
+  AddCheckbox(
+    "showInCombat",
+    "Show in combat",
+    "Always show the cursor ring while you are in combat, regardless of location."
+  )
+
+  -- Behaviour
+  AddHeader("Behaviour")
+
+  AddCheckbox(
+    "reactiveCursor",
+    "Reactive cursor",
+    "Shrinks the cursor ring while holding right mouse."
+  )
+
+  AddCheckbox(
+    "showGCDSpinner",
+    "Global cooldown (GCD) animation",
+    "Show a subtle animation on the ring that tracks the global cooldown."
+  )
+
+  AddCheckbox(
+    "hideInMenus",
+    "Hide ring while game menus are open",
+    "Hide the cursor ring while the main game menus are visible."
+  )
+
+  -- Appearance
+  AddHeader("Appearance")
+
+  AddSlider(
+    "size",
+    "Ring size",
+    "Adjust the overall size of the cursor ring.",
+    64, 128, 16
+  )
+
+  AddCheckbox(
+    "useClassColor",
+    "Use class colour",
+    "Tint the ring using your class colour instead of a custom hex colour."
+  )
+
+  -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
+  CreateSettingsPanelLegacy(category, true)
+
+  return settingsCategory
+end
 
 -- ---------------------------------------------------------------------
 -- Events
@@ -1087,7 +1349,11 @@ SLASH_HELLOCURSOR2 = "/hellocursor"
 
 SlashCmdList.HELLOCURSOR = function(msg)
   if msg == "toggle" then
-    HelloCursorDB.enabled = not HelloCursorDB.enabled
+    local nsKey = "HelloCursor_enabled"
+    local current = IsAddonEnabled()
+    local newValue = not current
+    HelloCursorDB.enabled = newValue
+    HelloCursorDB[nsKey] = newValue
     UpdateVisibility()
     print(("HelloCursor: %s"):format(HelloCursorDB.enabled and "enabled" or "disabled"))
     return
