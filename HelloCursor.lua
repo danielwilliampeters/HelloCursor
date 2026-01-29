@@ -217,12 +217,15 @@ local function IsAddonEnabled()
   return enabled
 end
 
+-- Temporary override: allow ring to show while using the colour picker
+local forceShowWhilePickingColour = false
+
 local function ShouldShowRing()
   if not IsAddonEnabled() then
     return false
   end
 
-  if HelloCursorDB.hideInMenus and IsAnyMenuOpen() then
+  if (not forceShowWhilePickingColour) and HelloCursorDB.hideInMenus and IsAnyMenuOpen() then
     return false
   end
 
@@ -338,6 +341,9 @@ end
 local currentMix = 0
 local WantsSmallRing -- forward decl
 local SetMix         -- forward decl
+local UpdateRingPosition -- forward decl (needed for picker driver)
+
+local pickerDriver
 
 local lastTexKey = 96
 local lastGCDRemaining = 0
@@ -529,7 +535,29 @@ local function CaptureCursorNow()
   lastCursorX, lastCursorY = (cx / scale), (cy / scale)
 end
 
-local function UpdateRingPosition()
+local function StartPickerCursorDriver()
+  if pickerDriver then return end
+  pickerDriver = CreateFrame("Frame")
+  local acc = 0
+  pickerDriver:SetScript("OnUpdate", function(_, elapsed)
+    acc = acc + (elapsed or 0)
+    if acc < 0.01 then return end
+    acc = 0
+    -- while the picker is open, keep following the actual UI cursor
+    if ringFrame:IsShown() then
+      CaptureCursorNow()
+      if UpdateRingPosition then UpdateRingPosition() end
+    end
+  end)
+end
+
+local function StopPickerCursorDriver()
+  if not pickerDriver then return end
+  pickerDriver:SetScript("OnUpdate", nil)
+  pickerDriver = nil
+end
+
+UpdateRingPosition = function()
   local scale = UIParent:GetEffectiveScale()
   local cx, cy = GetCursorPosition()
   cx, cy = cx / scale, cy / scale
@@ -662,7 +690,7 @@ ringFrame:SetScript("OnUpdate", function()
   -- Only detect end-of-GCD to fire the pop (no brighten logic here)
   CheckGCDPop()
 
-  UpdateRingPosition()
+  if UpdateRingPosition then UpdateRingPosition() end
 end)
 
 -- ---------------------------------------------------------------------
@@ -766,6 +794,23 @@ local function OpenColorPicker()
   ColorPickerFrame.cancelFunc = CancelToPrev
 
   picker:SetColorRGB(r, g, b)
+
+  -- While picking a colour, show the ring even if menus are open
+  forceShowWhilePickingColour = true
+  CaptureCursorNow()
+  UpdateVisibility()
+  StartPickerCursorDriver()
+
+  -- Turn the override off when the picker closes (hook once)
+  if not ColorPickerFrame.__HelloCursorHooked then
+    ColorPickerFrame.__HelloCursorHooked = true
+    ColorPickerFrame:HookScript("OnHide", function()
+      forceShowWhilePickingColour = false
+      StopPickerCursorDriver()
+      UpdateVisibility()
+    end)
+  end
+
   ColorPickerFrame:Show()
 end
 
@@ -1068,18 +1113,11 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   hint:SetText("Use RRGGBB (example: FF4FD8). Class colour disables picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
-  -- Reset button sits under the Ring colour controls (no separate section)
-  local defaultsBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-  defaultsBtn:SetSize(160, 22)
-  defaultsBtn:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -14)
-  defaultsBtn:SetText("Reset to defaults")
-  defaultsBtn:SetScript("OnClick", ResetToDefaults)
-
   panel:HookScript("OnShow", function()
     RefreshOptionsUI()
     C_Timer.After(0, function()
-      if defaultsBtn and defaultsBtn.GetBottom then
-        UpdateContentHeight(defaultsBtn, 28)
+      if hint and hint.GetBottom then
+        UpdateContentHeight(hint, 28)
       end
     end)
   end)
@@ -1205,6 +1243,13 @@ local function CreateSettingsPanel()
 
       inCallback = false
     end)
+  end
+
+  -- Register colorHex so the Blizzard "Defaults" button resets it too,
+  -- but we don't create a visible control in the main list.
+  do
+    local settingColorHex = RegisterSetting("colorHex", "Ring colour (hex)", DEFAULTS.colorHex)
+    OnChangedFor("colorHex", settingColorHex)
   end
 
   local function CreateCheckboxControl(setting, tooltip)
