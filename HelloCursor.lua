@@ -476,6 +476,8 @@ local lastTexKey = 96
 local lastGCDRemaining = 0
 local lastGCDBusy = false
 local gcdVisualActive = false -- when true, spinner replaces the ring visuals
+local gcdPopPlaying = false
+local suppressFlatRing = false
 
 -- ---------------------------------------------------------------------
 -- GCD end pop
@@ -496,6 +498,27 @@ if popDown.SetScaleFrom then popDown:SetScaleFrom(GCD_POP_SCALE, GCD_POP_SCALE) 
 popDown:SetScale(1, 1)
 popDown:SetDuration(GCD_POP_DOWN_TIME)
 popDown:SetSmoothing("IN")
+
+gcdPopAnim:SetScript("OnPlay", function()
+  gcdPopPlaying = true
+
+  -- Pop is a pulse on the RING, so ensure the ring visuals are active.
+  gcdVisualActive = false
+  suppressFlatRing = false
+
+  if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
+  if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
+
+  if SetMix then SetMix(currentMix) end
+end)
+
+gcdPopAnim:SetScript("OnFinished", function()
+  gcdPopPlaying = false
+end)
+
+gcdPopAnim:SetScript("OnStop", function()
+  gcdPopPlaying = false
+end)
 
 local function TriggerGCDPop()
   if not GCD_POP_ENABLED then return end
@@ -523,19 +546,29 @@ local function CheckGCDPop()
     gcdActive = remaining > 0
   end
 
-  -- Case 1: GCD was busy and now became idle -> pop.
+  -- Pop when GCD ends (normal case: we observe busy -> idle)
   if lastGCDBusy and (not gcdActive) then
     TriggerGCDPop()
   end
 
-  -- Case 2: GCD stayed busy but remaining jumped up (new GCD started
-  -- while the previous one finished in between samples, e.g. via spell queue).
-  if lastGCDBusy and gcdActive and (remaining > lastGCDRemaining + 0.02) then
+  -- Pop when a NEW GCD starts immediately after the old one ended
+  -- (we missed the idle state between samples).
+  -- Only fire this if the previous remaining was already near-zero.
+  if lastGCDBusy and gcdActive and (remaining > lastGCDRemaining + 0.02) and (lastGCDRemaining > 0) and (lastGCDRemaining < 0.08) then
     TriggerGCDPop()
   end
 
   -- Spinner / ring base visibility
-  local wantSpinner = HelloCursorDB.showGCDSpinner and gcdActive
+  local wantSpinner = HelloCursorDB.showGCDSpinner and gcdActive and (not gcdPopPlaying)
+
+  gcdVisualActive = wantSpinner
+  suppressFlatRing = wantSpinner
+
+
+  if wantSpinner and not IsNeonStyle() then
+    ringTexNormal:SetAlpha(0)
+    ringTexSmall:SetAlpha(0)
+  end
 
   if wantSpinner then
     if gcdSpinnerNormal and gcdSpinnerNormal.SetCooldown then
@@ -552,12 +585,9 @@ local function CheckGCDPop()
   end
 
   gcdVisualActive = wantSpinner
-  if SetMix then SetMix(currentMix) end
-
-
-  if not gcdVisualActive then
-    -- restore ring visuals according to the current mix
-    if SetMix then SetMix(currentMix) end
+  if not gcdVisualActive and SetMix then
+    -- Restore ring visuals according to the current mix
+    SetMix(currentMix)
   end
 
   lastGCDBusy = gcdActive
@@ -586,7 +616,6 @@ SetMix = function(mix)
   mix = Clamp(mix, 0, 1)
   currentMix = mix
 
-  -- Ensure correct style is visible (flat vs neon)
   SetStyleVisibility()
 
   local neon = IsNeonStyle()
@@ -598,43 +627,30 @@ SetMix = function(mix)
   end
 
   if gcdVisualActive then
-    -- While GCD spinner is active:
-    -- - Always crossfade the spinners
-    -- - In flat mode: spinner replaces the ring (hide flat ring textures)
-    -- - In neon mode: keep neon layers visible (spinner overlays them)
+    -- Always ensure correct style visible (flat vs neon)
+    SetStyleVisibility()
+    local neon = IsNeonStyle()
 
-    if not neon then
+    -- Neon mode: flat ring never contributes
+    if neon then
       ringTexNormal:SetAlpha(0)
       ringTexSmall:SetAlpha(0)
     end
 
-    if gcdSpinnerNormal then
-      if mix <= 0.0001 then
-        gcdSpinnerNormal:SetAlpha(1)
-      elseif mix >= 0.9999 then
-        gcdSpinnerNormal:SetAlpha(0)
-      else
-        gcdSpinnerNormal:SetAlpha(1 - mix)
-      end
-    end
+    -- If spinner should replace visuals:
+    if gcdVisualActive then
+      -- crossfade spinners
+      if gcdSpinnerNormal then gcdSpinnerNormal:SetAlpha(1 - mix) end
+      if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(mix) end
 
-    if gcdSpinnerSmall then
-      if mix <= 0.0001 then
-        gcdSpinnerSmall:SetAlpha(0)
-      elseif mix >= 0.9999 then
-        gcdSpinnerSmall:SetAlpha(1)
-      else
-        gcdSpinnerSmall:SetAlpha(mix)
-      end
-
-      if gcdVisualActive and not neon then
+      -- Flat mode: spinner replaces ring, so NEVER allow normal fade to run
+      if (not neon) and suppressFlatRing then
+        ringTexNormal:SetAlpha(0)
+        ringTexSmall:SetAlpha(0)
         return
       end
+      -- Neon mode falls through so neon layers can still fade normally
     end
-
-    -- IMPORTANT: do not return here, so neon alpha logic below still runs.
-    -- If neon is OFF, ringTex* are already hidden above, so the normal fade
-    -- section won't bring them back visually.
   end
 
   -- Normal crossfade (ring visuals)
@@ -669,10 +685,6 @@ SetMix = function(mix)
       ringTexNormal:SetAlpha(1 - mix)
       ringTexSmall:SetAlpha(mix)
     end
-  end
-
-  if SetSpinnerMix then
-    -- legacy no-op
   end
 end
 
@@ -849,6 +861,8 @@ end)
 ringFrame:SetScript("OnUpdate", function()
   if not ringFrame:IsShown() then return end
 
+  CheckGCDPop()
+
   local targetMix = WantsSmallRing() and 1 or 0
   if tweenActive then
     local t = (GetTime() - tweenStart) / TWEEN_DURATION
@@ -866,9 +880,6 @@ ringFrame:SetScript("OnUpdate", function()
     end
   end
 
-  -- Only detect end-of-GCD to fire the pop (no brighten logic here)
-  CheckGCDPop()
-
   if UpdateRingPosition then UpdateRingPosition() end
 end)
 
@@ -884,7 +895,6 @@ local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
 local cbGCDRef, cbHideMenusRef
 
 local sizeSliderRef
-local sizeValueRef
 
 local function GetPickerWidget()
   if not ColorPickerFrame then return nil end
@@ -999,7 +1009,7 @@ local function ResetToDefaults()
   end
 
   HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
-  HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
+  HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
 
   -- Keep Settings-backed (namespaced) variables in sync so the Blizzard
   -- Settings controls match defaults on reload.
@@ -1580,7 +1590,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
     HelloCursorDB = CopyDefaults(HelloCursorDB, DEFAULTS)
     HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
-    HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 16, 256)
+    HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
 
     CaptureCursorNow()
 
