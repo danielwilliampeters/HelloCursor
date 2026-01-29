@@ -1295,7 +1295,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "enabled",
     "Enable Hello Cursor",
-    "Master toggle for the cursor ring."
+    "Enables or disables Hello Cursor.\n\nChanges require a UI reload."
   )
 
   AddCheckbox(
