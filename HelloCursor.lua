@@ -11,28 +11,16 @@ HelloCursorDB = HelloCursorDB or {}
 
 local DEFAULTS = {
   enabled = true,
-
-  -- Colour
-  colorHex = "FF4FD8",      -- RRGGBB or AARRGGBB
-  useClassColor = false,    -- when true, ignores colorHex for RGB
-
-  -- Ring size (logical size; snapped to authored assets)
+  colorHex = "FF4FD8",
+  useClassColor = false,
   size = 96,
-
-  -- Visibility rules
   showWorld = true,
-  showPvE = true,           -- dungeons / delves / raids
-  showPvP = true,           -- battlegrounds / arena
-  showInCombat = true,      -- override: show anywhere while in combat
-
-  -- Menus
-  hideInMenus = true,      -- when true, hide the ring while game menus are open
-
-  -- Behaviour
-  reactiveCursor = true,    -- crossfade to small ring while mouselooking
-
-  -- GCD pop (end-of-global-cooldown pulse)
-  showGCDSpinner = false,   -- when true, play a pop animation at the end of the GCD
+  showPvE = true,
+  showPvP = true,
+  showInCombat = true,
+  hideInMenus = true,
+  reactiveCursor = true,
+  showGCDSpinner = false,
 }
 
 -- Authored ring sizes (constant stroke thickness per asset)
@@ -858,7 +846,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   if not Settings or not Settings.RegisterCanvasLayoutCategory then return nil end
 
   local panel = CreateFrame("Frame")
-  panel.name = "HelloCursor"
+  panel.name = "Hello Cursor"
 
   local scrollFrame = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
   scrollFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 0, 0)
@@ -889,11 +877,11 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
   title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("HelloCursor")
+  title:SetText(isAdvanced and "Advanced" or "Hello Cursor")
 
-  local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-  subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-  subtitle:SetText("Advanced settings")
+  if isAdvanced then
+    title:SetFontObject("GameFontHighlightLarge") -- white
+  end
 
   local function MakeHeader(text, anchor, yOff)
     local h = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -934,11 +922,11 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
     return sep
   end
 
-  local previousAnchor = subtitle
+  local previousAnchor = title
 
   if not isAdvanced then
     -- Visibility
-    local visHeader = MakeHeader("Visibility", subtitle, -18)
+    local visHeader = MakeHeader("Visibility", title, -18)
 
     cbWorldRef = MakeCheckbox(
       "Show in world",
@@ -1063,7 +1051,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
     previousAnchor = cbClassRef
   end
 
-  local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+  local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   colorLabel:SetPoint("TOPLEFT", previousAnchor, "BOTTOMLEFT", 0, -22)
   colorLabel:SetText("Ring colour")
 
@@ -1124,9 +1112,9 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local category
   if parentCategory and Settings.RegisterCanvasLayoutSubcategory and isAdvanced then
-    category = Settings.RegisterCanvasLayoutSubcategory(parentCategory, panel, "Advanced (Colour & Utilities)")
+    category = Settings.RegisterCanvasLayoutSubcategory(parentCategory, panel, "Advanced")
   else
-    category = Settings.RegisterCanvasLayoutCategory(panel, "HelloCursor")
+    category = Settings.RegisterCanvasLayoutCategory(panel, "Hello Cursor")
     Settings.RegisterAddOnCategory(category)
   end
 
@@ -1150,7 +1138,7 @@ local function CreateSettingsPanel()
     return settingsCategory
   end
 
-  local category, layout = Settings.RegisterVerticalLayoutCategory("HelloCursor")
+  local category, layout = Settings.RegisterVerticalLayoutCategory("Hello Cursor")
   settingsCategory = category
   Settings.RegisterAddOnCategory(category)
 
@@ -1304,17 +1292,11 @@ local function CreateSettingsPanel()
     end
   end
 
-  -- General
-  AddHeader("General")
-
   AddCheckbox(
     "enabled",
-    "Enable HelloCursor",
+    "Enable Hello Cursor",
     "Master toggle for the cursor ring."
   )
-
-  -- Visibility
-  AddHeader("Visibility")
 
   AddCheckbox(
     "showWorld",
@@ -1340,8 +1322,11 @@ local function CreateSettingsPanel()
     "Always show the cursor ring while you are in combat, regardless of location."
   )
 
-  -- Behaviour
-  AddHeader("Behaviour")
+  AddCheckbox(
+    "hideInMenus",
+    "Hide ring while game menus are open",
+    "Hide the cursor ring while the main game menus are visible."
+  )
 
   AddCheckbox(
     "reactiveCursor",
@@ -1355,13 +1340,6 @@ local function CreateSettingsPanel()
     "Show a subtle animation on the ring that tracks the global cooldown."
   )
 
-  AddCheckbox(
-    "hideInMenus",
-    "Hide ring while game menus are open",
-    "Hide the cursor ring while the main game menus are visible."
-  )
-
-  -- Appearance
   AddHeader("Appearance")
 
   AddSlider(
@@ -1374,7 +1352,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "useClassColor",
     "Use class colour",
-    "Tint the ring using your class colour instead of a custom hex colour."
+    "Tint the ring using your class colour instead of a custom colour.\n\nRing colour (hex & picker) is configured in Advanced settings."
   )
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
