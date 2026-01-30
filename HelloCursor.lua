@@ -73,22 +73,6 @@ local NEON_INNER_SMALL_TEX_BY_SIZE = {
   [128] = "Interface\\AddOns\\HelloCursor\\neon_inner_small_128.tga",
 }
 
-local NEON_OUTER_TEX_BY_SIZE = {
-  [64]  = "Interface\\AddOns\\HelloCursor\\neon_outer_64.tga",
-  [80]  = "Interface\\AddOns\\HelloCursor\\neon_outer_80.tga",
-  [96]  = "Interface\\AddOns\\HelloCursor\\neon_outer_96.tga",
-  [112] = "Interface\\AddOns\\HelloCursor\\neon_outer_112.tga",
-  [128] = "Interface\\AddOns\\HelloCursor\\neon_outer_128.tga",
-}
-
-local NEON_OUTER_SMALL_TEX_BY_SIZE = {
-  [64]  = "Interface\\AddOns\\HelloCursor\\neon_outer_small_64.tga",
-  [80]  = "Interface\\AddOns\\HelloCursor\\neon_outer_small_80.tga",
-  [96]  = "Interface\\AddOns\\HelloCursor\\neon_outer_small_96.tga",
-  [112] = "Interface\\AddOns\\HelloCursor\\neon_outer_small_112.tga",
-  [128] = "Interface\\AddOns\\HelloCursor\\neon_outer_small_128.tga",
-}
-
 -- ---------------------------------------------------------------------
 -- Tunables
 -- ---------------------------------------------------------------------
@@ -106,13 +90,10 @@ local GCD_POP_DOWN_TIME = 0.075
 -- Fixed canvas so ring thickness never scales (textures are authored for this)
 local RING_CANVAS_SIZE = 128
 
-local NEON_ALPHA_CORE  = 1.00
-local NEON_ALPHA_INNER = 0.30
-local NEON_ALPHA_OUTER = 0.08
-
-local DEBUG_NEON_SHOW_CORE  = true
-local DEBUG_NEON_SHOW_INNER = true
-local DEBUG_NEON_SHOW_OUTER = true
+-- Neon overlay alphas
+local NEON_BASE_ALPHA = 0.80
+local NEON_ALPHA_CORE  = 0.70
+local NEON_ALPHA_INNER = 0.40
 
 -- ---------------------------------------------------------------------
 -- Small utils
@@ -300,33 +281,30 @@ ringTexNormal:SetAllPoints(true)
 ringTexSmall:SetAllPoints(true)
 
 -- Neon layers (optional style)
-local neonCoreNormal  = ringFrame:CreateTexture(nil, "BACKGROUND")
-local neonCoreSmall   = ringFrame:CreateTexture(nil, "BACKGROUND")
-local neonOuterNormal = ringFrame:CreateTexture(nil, "BORDER")
-local neonOuterSmall  = ringFrame:CreateTexture(nil, "BORDER")
-local neonInnerNormal = ringFrame:CreateTexture(nil, "BORDER")
-local neonInnerSmall  = ringFrame:CreateTexture(nil, "BORDER")
+-- We keep THREE visuals total in neon mode:
+--   1) BASE ring  = ringTexNormal/ringTexSmall (tinted)  [already created above]
+--   2) CORE       = neonCore*   (tinted, ADD)
+--   3) INNER line = neonInner*  (white,  ADD)
+
+local neonCoreNormal  = ringFrame:CreateTexture(nil, "ARTWORK")
+local neonCoreSmall   = ringFrame:CreateTexture(nil, "ARTWORK")
+local neonInnerNormal = ringFrame:CreateTexture(nil, "OVERLAY")
+local neonInnerSmall  = ringFrame:CreateTexture(nil, "OVERLAY")
 
 neonCoreNormal:SetAllPoints(true)
 neonCoreSmall:SetAllPoints(true)
-neonOuterNormal:SetAllPoints(true)
-neonOuterSmall:SetAllPoints(true)
 neonInnerNormal:SetAllPoints(true)
 neonInnerSmall:SetAllPoints(true)
 
--- Core behind, glows above it
-neonCoreNormal:SetDrawLayer("BACKGROUND", 0)
-neonCoreSmall:SetDrawLayer("BACKGROUND", 0)
-neonCoreNormal:SetBlendMode("BLEND")
-neonCoreSmall:SetBlendMode("BLEND")
+-- CORE: tinted neon tube light (ADD) - sits above base ring
+neonCoreNormal:SetDrawLayer("ARTWORK", 0)
+neonCoreSmall:SetDrawLayer("ARTWORK", 0)
+neonCoreNormal:SetBlendMode("ADD")
+neonCoreSmall:SetBlendMode("ADD")
 
-neonOuterNormal:SetDrawLayer("BORDER", 0)
-neonOuterSmall:SetDrawLayer("BORDER", 0)
-neonOuterNormal:SetBlendMode("ADD")
-neonOuterSmall:SetBlendMode("ADD")
-
-neonInnerNormal:SetDrawLayer("BORDER", 1)
-neonInnerSmall:SetDrawLayer("BORDER", 1)
+-- INNER: thin highlight line (ADD) - sits above core
+neonInnerNormal:SetDrawLayer("OVERLAY", 0)
+neonInnerSmall:SetDrawLayer("OVERLAY", 0)
 neonInnerNormal:SetBlendMode("ADD")
 neonInnerSmall:SetBlendMode("ADD")
 
@@ -338,8 +316,6 @@ SafeSetTexture(neonCoreNormal,  NEON_CORE_TEX_BY_SIZE[96],  nil)
 SafeSetTexture(neonCoreSmall,   NEON_CORE_SMALL_TEX_BY_SIZE[96], NEON_CORE_TEX_BY_SIZE[96])
 SafeSetTexture(neonInnerNormal, NEON_INNER_TEX_BY_SIZE[96], nil)
 SafeSetTexture(neonInnerSmall,  NEON_INNER_SMALL_TEX_BY_SIZE[96], NEON_INNER_TEX_BY_SIZE[96])
-SafeSetTexture(neonOuterNormal, NEON_OUTER_TEX_BY_SIZE[96], nil)
-SafeSetTexture(neonOuterSmall,  NEON_OUTER_SMALL_TEX_BY_SIZE[96], NEON_OUTER_TEX_BY_SIZE[96])
 
 -- GCD spinners (normal + small), crossfaded like the ring
 local gcdSpinnerNormal = CreateFrame("Cooldown", nil, ringFrame, "CooldownFrameTemplate")
@@ -383,19 +359,15 @@ end
 local function SetStyleVisibility()
   local neon = IsNeonStyle()
 
-  -- flat ring
-  SetShownSafe(ringTexNormal, not neon)
-  SetShownSafe(ringTexSmall,  not neon)
+  -- BASE ring should still render in neon mode (this is the "pink ring behind it all")
+  SetShownSafe(ringTexNormal, true)
+  SetShownSafe(ringTexSmall,  true)
 
-  -- neon layers
-  SetShownSafe(neonOuterNormal, neon and DEBUG_NEON_SHOW_OUTER)
-  SetShownSafe(neonOuterSmall,  neon and DEBUG_NEON_SHOW_OUTER)
-
-  SetShownSafe(neonInnerNormal, neon and DEBUG_NEON_SHOW_INNER)
-  SetShownSafe(neonInnerSmall,  neon and DEBUG_NEON_SHOW_INNER)
-
-  SetShownSafe(neonCoreNormal,  neon and DEBUG_NEON_SHOW_CORE)
-  SetShownSafe(neonCoreSmall,   neon and DEBUG_NEON_SHOW_CORE)
+  -- Neon overlays only in neon mode
+  SetShownSafe(neonCoreNormal,  neon)
+  SetShownSafe(neonCoreSmall,   neon)
+  SetShownSafe(neonInnerNormal, neon)
+  SetShownSafe(neonInnerSmall,  neon)
 end
 
 -- ---------------------------------------------------------------------
@@ -460,9 +432,6 @@ local function ApplyTintIfNeeded(force)
 
     neonCoreNormal:SetVertexColor(r, g, b, tintA)
     neonCoreSmall:SetVertexColor(r, g, b, tintA)
-
-    neonOuterNormal:SetVertexColor(r, g, b, tintA)
-    neonOuterSmall:SetVertexColor(r, g, b, tintA)
 
     neonInnerNormal:SetVertexColor(1, 1, 1, tintA)
     neonInnerSmall:SetVertexColor(1, 1, 1, tintA)
@@ -573,10 +542,19 @@ local function CheckGCDPop()
   gcdVisualActive = wantSpinner
   suppressFlatRing = wantSpinner
 
-
-  if wantSpinner and not IsNeonStyle() then
+  if wantSpinner then
+    -- While the spinner is active, hide the static ring visuals so
+    -- the GCD wedge is the only visible ring (this matches the
+    -- "base ring" behaviour for both flat and neon styles).
     ringTexNormal:SetAlpha(0)
     ringTexSmall:SetAlpha(0)
+
+    if IsNeonStyle() then
+      neonCoreNormal:SetAlpha(0)
+      neonCoreSmall:SetAlpha(0)
+      neonInnerNormal:SetAlpha(0)
+      neonInnerSmall:SetAlpha(0)
+    end
   end
 
   if wantSpinner then
@@ -641,67 +619,62 @@ SetMix = function(mix)
 
   local neon = IsNeonStyle()
 
-  if neon then
-    -- Flat ring must NEVER contribute in neon mode
-    ringTexNormal:SetAlpha(0)
-    ringTexSmall:SetAlpha(0)
-  end
-
   if spinnerActive  then
-    -- Neon mode: flat ring never contributes
-    if neon then
-      ringTexNormal:SetAlpha(0)
-      ringTexSmall:SetAlpha(0)
-    end
-
     -- If spinner should replace visuals:
     if spinnerActive  then
       -- crossfade spinners
       if gcdSpinnerNormal then gcdSpinnerNormal:SetAlpha(1 - mix) end
       if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(mix) end
 
-      -- Flat mode: spinner replaces ring, so NEVER allow normal fade to run
-      if (not neon) and suppressFlatRing then
+      -- When the spinner is replacing the visuals, hide both the base
+      -- ring and (in neon mode) the neon overlays so the behaviour is
+      -- identical for flat and neon styles.
+      if suppressFlatRing then
         ringTexNormal:SetAlpha(0)
         ringTexSmall:SetAlpha(0)
+
+        if neon then
+          neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(0)
+          neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(0)
+        end
         return
       end
-      -- Neon mode falls through so neon layers can still fade normally
     end
   end
 
-  -- Normal crossfade (ring visuals)
+  -- Normal crossfade (BASE ring always)
+  local baseMul = 1
+  if neon then baseMul = NEON_BASE_ALPHA end
+
   if mix <= 0.0001 then
-    if neon then
-      neonOuterNormal:SetAlpha(NEON_ALPHA_OUTER); neonOuterSmall:SetAlpha(0)
-      neonInnerNormal:SetAlpha(NEON_ALPHA_INNER); neonInnerSmall:SetAlpha(0)
-      neonCoreNormal:SetAlpha(NEON_ALPHA_CORE);   neonCoreSmall:SetAlpha(0)
-    else
-      ringTexNormal:SetAlpha(1)
-      ringTexSmall:SetAlpha(0)
-    end
-
+    ringTexNormal:SetAlpha(1 * baseMul)
+    ringTexSmall:SetAlpha(0)
   elseif mix >= 0.9999 then
-    if neon then
-      neonOuterNormal:SetAlpha(0); neonOuterSmall:SetAlpha(NEON_ALPHA_OUTER)
-      neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(NEON_ALPHA_INNER)
-      neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(NEON_ALPHA_CORE)
-    else
-      ringTexNormal:SetAlpha(0)
-      ringTexSmall:SetAlpha(1)
-    end
-
+    ringTexNormal:SetAlpha(0)
+    ringTexSmall:SetAlpha(1 * baseMul)
   else
-    if neon then
+    ringTexNormal:SetAlpha((1 - mix) * baseMul)
+    ringTexSmall:SetAlpha(mix * baseMul)
+  end
+
+  -- Neon overlays (only when neon style enabled)
+  if neon then
+    if mix <= 0.0001 then
+      neonCoreNormal:SetAlpha(NEON_ALPHA_CORE);   neonCoreSmall:SetAlpha(0)
+      neonInnerNormal:SetAlpha(NEON_ALPHA_INNER); neonInnerSmall:SetAlpha(0)
+    elseif mix >= 0.9999 then
+      neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(NEON_ALPHA_CORE)
+      neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(NEON_ALPHA_INNER)
+    else
       local aN = 1 - mix
       local aS = mix
-      neonOuterNormal:SetAlpha(aN * NEON_ALPHA_OUTER); neonOuterSmall:SetAlpha(aS * NEON_ALPHA_OUTER)
-      neonInnerNormal:SetAlpha(aN * NEON_ALPHA_INNER); neonInnerSmall:SetAlpha(aS * NEON_ALPHA_INNER)
       neonCoreNormal:SetAlpha(aN * NEON_ALPHA_CORE);   neonCoreSmall:SetAlpha(aS * NEON_ALPHA_CORE)
-    else
-      ringTexNormal:SetAlpha(1 - mix)
-      ringTexSmall:SetAlpha(mix)
+      neonInnerNormal:SetAlpha(aN * NEON_ALPHA_INNER); neonInnerSmall:SetAlpha(aS * NEON_ALPHA_INNER)
     end
+  else
+    -- ensure overlays are invisible if neon is off
+    neonCoreNormal:SetAlpha(0); neonCoreSmall:SetAlpha(0)
+    neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(0)
   end
 end
 
@@ -798,11 +771,8 @@ local function RefreshSize()
 
   -- Always keep spinner swipe textures correct (depends on current style)
   do
-    local neon = IsNeonStyle()
-    local swipeNormal = neon and NEON_CORE_TEX_BY_SIZE[key] or RING_TEX_BY_SIZE[key]
-    local swipeSmall  = neon
-      and (NEON_CORE_SMALL_TEX_BY_SIZE[key] or NEON_CORE_TEX_BY_SIZE[key])
-      or  (RING_SMALL_TEX_BY_SIZE[key] or RING_TEX_BY_SIZE[key])
+    local swipeNormal = RING_TEX_BY_SIZE[key]
+    local swipeSmall  = RING_SMALL_TEX_BY_SIZE[key] or RING_TEX_BY_SIZE[key]
 
     if gcdSpinnerNormal and gcdSpinnerNormal.SetSwipeTexture then
       gcdSpinnerNormal:SetSwipeTexture(swipeNormal)
@@ -824,9 +794,6 @@ local function RefreshSize()
 
   SafeSetTexture(neonInnerNormal, NEON_INNER_TEX_BY_SIZE[key], NEON_INNER_TEX_BY_SIZE[96])
   SafeSetTexture(neonInnerSmall,  NEON_INNER_SMALL_TEX_BY_SIZE[key], NEON_INNER_SMALL_TEX_BY_SIZE[96])
-
-  SafeSetTexture(neonOuterNormal, NEON_OUTER_TEX_BY_SIZE[key], NEON_OUTER_TEX_BY_SIZE[96])
-  SafeSetTexture(neonOuterSmall,  NEON_OUTER_SMALL_TEX_BY_SIZE[key], NEON_OUTER_SMALL_TEX_BY_SIZE[96])
 
   lastTexKey = key
 
