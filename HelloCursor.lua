@@ -95,7 +95,7 @@ local NEON_OUTER_SMALL_TEX_BY_SIZE = {
 
 local TWEEN_DURATION = 0.08
 local GCD_SPELL_ID = 61304 -- "Global Cooldown"
-local GCD_POP_CHECK_INTERVAL = 0.02 -- legacy; no longer used for throttling, kept for backwards compat
+local GCD_POP_CHECK_INTERVAL = 0.02 -- interval for polling GCD state
 
 -- Pop at end of GCD (a quick scale pulse on the ring frame)
 local GCD_POP_ENABLED   = true
@@ -117,6 +117,14 @@ local DEBUG_NEON_SHOW_OUTER = true
 -- ---------------------------------------------------------------------
 -- Small utils
 -- ---------------------------------------------------------------------
+
+-- Cache a few frequently used globals in locals for tiny per-frame savings.
+local GetTime             = GetTime
+local GetCursorPosition   = GetCursorPosition
+local IsMouselooking      = IsMouselooking
+local UnitAffectingCombat = UnitAffectingCombat
+local IsInInstance        = IsInInstance
+local math_abs            = math.abs
 
 local function CopyDefaults(dst, src)
   if type(dst) ~= "table" then dst = {} end
@@ -182,7 +190,7 @@ end
 local function NearestKey(map, target)
   local bestKey, bestDist
   for k in pairs(map) do
-    local d = math.abs(k - target)
+    local d = math_abs(k - target)
     if not bestDist or d < bestDist then
       bestDist, bestKey = d, k
     end
@@ -478,6 +486,7 @@ local lastGCDBusy = false
 local gcdVisualActive = false -- when true, spinner replaces the ring visuals
 local gcdPopPlaying = false
 local suppressFlatRing = false
+local gcdCheckAccum = 0
 
 -- ---------------------------------------------------------------------
 -- GCD end pop
@@ -579,6 +588,10 @@ local function CheckGCDPop()
       gcdSpinnerSmall:SetCooldown(startTime, duration)
       gcdSpinnerSmall:Show()
     end
+
+    if gcdSpinnerNormal then gcdSpinnerNormal:SetAlpha(1 - currentMix) end
+    if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(currentMix) end
+    
   else
     if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
     if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
@@ -612,9 +625,17 @@ local function StartTween(fromMix, toMix)
   tweenTo = toMix
 end
 
+local function IsSpinnerShown()
+  return (gcdSpinnerNormal and gcdSpinnerNormal:IsShown())
+      or (gcdSpinnerSmall  and gcdSpinnerSmall:IsShown())
+end
+
 SetMix = function(mix)
   mix = Clamp(mix, 0, 1)
   currentMix = mix
+
+  local spinnerShown  = IsSpinnerShown()
+  local spinnerActive = gcdVisualActive or spinnerShown
 
   SetStyleVisibility()
 
@@ -626,11 +647,7 @@ SetMix = function(mix)
     ringTexSmall:SetAlpha(0)
   end
 
-  if gcdVisualActive then
-    -- Always ensure correct style visible (flat vs neon)
-    SetStyleVisibility()
-    local neon = IsNeonStyle()
-
+  if spinnerActive  then
     -- Neon mode: flat ring never contributes
     if neon then
       ringTexNormal:SetAlpha(0)
@@ -638,7 +655,7 @@ SetMix = function(mix)
     end
 
     -- If spinner should replace visuals:
-    if gcdVisualActive then
+    if spinnerActive  then
       -- crossfade spinners
       if gcdSpinnerNormal then gcdSpinnerNormal:SetAlpha(1 - mix) end
       if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(mix) end
@@ -840,17 +857,46 @@ local function UpdateVisibility()
   end
 end
 
--- Always-on driver to re-evaluate visibility periodically so menu open/close
--- affects the ring without relying only on game events. This frame itself is
--- never hidden, unlike the ring frame.
+-- Always-on driver (lightweight) to react to menu open/close without relying on events.
+-- Optimised: only does work when the addon is enabled AND when menu state actually changes.
 local visibilityDriver = CreateFrame("Frame")
 local visElapsed = 0
+local lastMenuOpen = nil
+local lastShouldShow = nil
+
 visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
-  if not HelloCursorDB.hideInMenus then return end
+  -- If the addon is off, do nothing.
+  if not IsAddonEnabled() then
+    if lastShouldShow ~= false then
+      lastShouldShow = false
+      if ringFrame:IsShown() then ringFrame:Hide() end
+    end
+    return
+  end
+
+  -- If we aren't hiding in menus, there is no reason to poll menus.
+  if not HelloCursorDB.hideInMenus then
+    -- Still ensure visibility rules are respected if something else changed.
+    -- (Very cheap because ShouldShowRing() early-outs fast.)
+    if lastShouldShow == nil then
+      UpdateVisibility()
+      lastShouldShow = ringFrame:IsShown()
+    end
+    return
+  end
+
   visElapsed = visElapsed + (elapsed or 0)
-  if visElapsed >= 0.05 then
-    visElapsed = 0
+  if visElapsed < 0.10 then return end -- 10Hz is plenty for menu open/close
+  visElapsed = 0
+
+  local menuOpen = IsAnyMenuOpen()
+
+  -- Only recompute visibility if menu state flipped (open/close),
+  -- or if we don't have a baseline yet.
+  if lastMenuOpen == nil or menuOpen ~= lastMenuOpen then
+    lastMenuOpen = menuOpen
     UpdateVisibility()
+    lastShouldShow = ringFrame:IsShown()
   end
 end)
 
@@ -858,10 +904,26 @@ end)
 -- OnUpdate loop
 -- ---------------------------------------------------------------------
 
-ringFrame:SetScript("OnUpdate", function()
+local lastTargetMix = 0
+
+ringFrame:SetScript("OnUpdate", function(_, elapsed)
   if not ringFrame:IsShown() then return end
 
-  CheckGCDPop()
+  local targetMix = WantsSmallRing() and 1 or 0
+  if targetMix ~= lastTargetMix then
+    lastTargetMix = targetMix
+    if HelloCursorDB.showGCDSpinner then
+      CheckGCDPop() -- sync flags immediately on RMB toggle
+    end
+  end
+
+  if HelloCursorDB.showGCDSpinner then
+    gcdCheckAccum = gcdCheckAccum + (elapsed or 0)
+    if gcdCheckAccum >= GCD_POP_CHECK_INTERVAL then
+      gcdCheckAccum = 0
+      CheckGCDPop()
+    end
+  end
 
   local targetMix = WantsSmallRing() and 1 or 0
   if tweenActive then
@@ -873,10 +935,8 @@ ringFrame:SetScript("OnUpdate", function()
       SetMix(Lerp(tweenFrom, tweenTo, EaseInOut(t)))
     end
   else
-    if math.abs(currentMix - targetMix) > 0.001 then
+    if math_abs(currentMix - targetMix) > 0.001 then
       StartTween(currentMix, targetMix)
-    else
-      SetMix(targetMix)
     end
   end
 
@@ -1421,6 +1481,13 @@ local function CreateSettingsPanel()
 
       elseif key == "showGCDSpinner" then
         ApplyTintIfNeeded(true)
+        if not HelloCursorDB.showGCDSpinner then
+          if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
+          if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
+          gcdVisualActive = false
+          suppressFlatRing = false
+          if SetMix then SetMix(currentMix) end
+        end
         
       elseif key == "useNeonRing" then
         RefreshSize()
@@ -1434,6 +1501,9 @@ local function CreateSettingsPanel()
         or key == "showInCombat"
         or key == "hideInMenus"
         or key == "enabled" then
+
+        lastMenuOpen = nil
+        lastShouldShow = nil
         UpdateVisibility()
       end
 
