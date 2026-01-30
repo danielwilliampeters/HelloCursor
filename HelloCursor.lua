@@ -5,6 +5,11 @@ local VERSION = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "dev"
 
 HelloCursorDB = HelloCursorDB or {}
 
+HelloCursor = HelloCursor or {}
+local HC = HelloCursor
+HC.ADDON_NAME = ADDON_NAME
+HC.VERSION = VERSION
+
 -- ---------------------------------------------------------------------
 -- Defaults
 -- ---------------------------------------------------------------------
@@ -21,7 +26,7 @@ local DEFAULTS = {
   hideInMenus = true,
   reactiveCursor = true,
   showGCDSpinner = false,
-  useNeonRing = false,
+  useNeonRing = true,
 }
 
 -- Authored ring sizes (constant stroke thickness per asset)
@@ -81,7 +86,6 @@ local TWEEN_DURATION = 0.08
 local GCD_SPELL_ID = 61304 -- "Global Cooldown"
 local GCD_POP_CHECK_INTERVAL = 0.02 -- interval for polling GCD state
 
--- Pop at end of GCD (a quick scale pulse on the ring frame)
 local GCD_POP_ENABLED   = true
 local GCD_POP_SCALE     = 1.16
 local GCD_POP_UP_TIME   = 0.045
@@ -91,15 +95,14 @@ local GCD_POP_DOWN_TIME = 0.075
 local RING_CANVAS_SIZE = 128
 
 -- Neon overlay alphas
-local NEON_BASE_ALPHA = 0.80
-local NEON_ALPHA_CORE  = 0.70
-local NEON_ALPHA_INNER = 0.40
+local NEON_ALPHA_BASE  = 0.95
+local NEON_ALPHA_CORE  = 1.00
+local NEON_ALPHA_INNER = 1.00
 
 -- ---------------------------------------------------------------------
 -- Small utils
 -- ---------------------------------------------------------------------
 
--- Cache a few frequently used globals in locals for tiny per-frame savings.
 local GetTime             = GetTime
 local GetCursorPosition   = GetCursorPosition
 local IsMouselooking      = IsMouselooking
@@ -208,13 +211,10 @@ end
 -- ---------------------------------------------------------------------
 
 local function IsAnyMenuOpen()
-  -- Main ESC menu
   if GameMenuFrame and GameMenuFrame:IsShown() then return true end
 
-  -- Dragonflight settings panel
   if SettingsPanel and SettingsPanel:IsShown() then return true end
 
-  -- Older options frames (still present on some clients)
   if InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then return true end
   if VideoOptionsFrame and VideoOptionsFrame:IsShown() then return true end
   if AudioOptionsFrame and AudioOptionsFrame:IsShown() then return true end
@@ -275,49 +275,52 @@ end
 -- ---------------------------------------------------------------------
 
 local ringFrame = CreateFrame("Frame", "HelloCursorFrame", UIParent)
-local ringTexNormal = ringFrame:CreateTexture(nil, "OVERLAY")
-local ringTexSmall = ringFrame:CreateTexture(nil, "OVERLAY")
-
 ringFrame:SetFrameStrata("TOOLTIP")
 ringFrame:SetSize(RING_CANVAS_SIZE, RING_CANVAS_SIZE)
 ringFrame:Hide()
+
+-- =========================================================
+-- BASE RING (bottom of stack)
+-- =========================================================
+local ringTexNormal = ringFrame:CreateTexture(nil, "BACKGROUND")
+local ringTexSmall  = ringFrame:CreateTexture(nil, "BACKGROUND")
+
 ringTexNormal:SetAllPoints(true)
 ringTexSmall:SetAllPoints(true)
 
--- Neon layers (optional style)
--- We keep THREE visuals total in neon mode:
---   1) BASE ring  = ringTexNormal/ringTexSmall (tinted)  [already created above]
---   2) CORE       = neonCore*   (tinted, ADD)
---   3) INNER line = neonInner*  (white,  ADD)
-
-local neonCoreNormal  = ringFrame:CreateTexture(nil, "ARTWORK")
-local neonCoreSmall   = ringFrame:CreateTexture(nil, "ARTWORK")
-local neonInnerNormal = ringFrame:CreateTexture(nil, "OVERLAY")
-local neonInnerSmall  = ringFrame:CreateTexture(nil, "OVERLAY")
+-- =========================================================
+-- NEON CORE (above base)
+-- =========================================================
+local neonCoreNormal = ringFrame:CreateTexture(nil, "ARTWORK")
+local neonCoreSmall  = ringFrame:CreateTexture(nil, "ARTWORK")
 
 neonCoreNormal:SetAllPoints(true)
 neonCoreSmall:SetAllPoints(true)
-neonInnerNormal:SetAllPoints(true)
-neonInnerSmall:SetAllPoints(true)
 
--- CORE: tinted neon tube light (ADD) - sits above base ring
-neonCoreNormal:SetDrawLayer("ARTWORK", 0)
-neonCoreSmall:SetDrawLayer("ARTWORK", 0)
 neonCoreNormal:SetBlendMode("ADD")
 neonCoreSmall:SetBlendMode("ADD")
 
--- INNER: thin highlight line (ADD) - sits above core
-neonInnerNormal:SetDrawLayer("OVERLAY", 0)
-neonInnerSmall:SetDrawLayer("OVERLAY", 0)
+-- =========================================================
+-- NEON INNER (top highlight)
+-- =========================================================
+local neonInnerNormal = ringFrame:CreateTexture(nil, "OVERLAY")
+local neonInnerSmall  = ringFrame:CreateTexture(nil, "OVERLAY")
+
+neonInnerNormal:SetAllPoints(true)
+neonInnerSmall:SetAllPoints(true)
+
 neonInnerNormal:SetBlendMode("ADD")
 neonInnerSmall:SetBlendMode("ADD")
 
+-- =========================================================
 -- Initial textures (overridden by RefreshSize)
+-- =========================================================
 SafeSetTexture(ringTexNormal, RING_TEX_BY_SIZE[96], nil)
 SafeSetTexture(ringTexSmall,  RING_SMALL_TEX_BY_SIZE[96], RING_TEX_BY_SIZE[96])
 
-SafeSetTexture(neonCoreNormal,  NEON_CORE_TEX_BY_SIZE[96],  nil)
+SafeSetTexture(neonCoreNormal,  NEON_CORE_TEX_BY_SIZE[96], nil)
 SafeSetTexture(neonCoreSmall,   NEON_CORE_SMALL_TEX_BY_SIZE[96], NEON_CORE_TEX_BY_SIZE[96])
+
 SafeSetTexture(neonInnerNormal, NEON_INNER_TEX_BY_SIZE[96], nil)
 SafeSetTexture(neonInnerSmall,  NEON_INNER_SMALL_TEX_BY_SIZE[96], NEON_INNER_TEX_BY_SIZE[96])
 
@@ -363,11 +366,9 @@ end
 local function SetStyleVisibility()
   local neon = IsNeonStyle()
 
-  -- BASE ring should still render in neon mode (this is the "pink ring behind it all")
   SetShownSafe(ringTexNormal, true)
   SetShownSafe(ringTexSmall,  true)
 
-  -- Neon overlays only in neon mode
   SetShownSafe(neonCoreNormal,  neon)
   SetShownSafe(neonCoreSmall,   neon)
   SetShownSafe(neonInnerNormal, neon)
@@ -437,8 +438,8 @@ local function ApplyTintIfNeeded(force)
     neonCoreNormal:SetVertexColor(r, g, b, tintA)
     neonCoreSmall:SetVertexColor(r, g, b, tintA)
 
-    neonInnerNormal:SetVertexColor(1, 1, 1, tintA)
-    neonInnerSmall:SetVertexColor(1, 1, 1, tintA)
+    neonInnerNormal:SetVertexColor(r, g, b, tintA)
+    neonInnerSmall:SetVertexColor(r, g, b, tintA)
   end
 end
 
@@ -456,7 +457,7 @@ local pickerDriver
 local lastTexKey = 96
 local lastGCDRemaining = 0
 local lastGCDBusy = false
-local gcdVisualActive = false -- when true, spinner replaces the ring visuals
+local gcdVisualActive = false
 local gcdPopPlaying = false
 local suppressFlatRing = false
 local gcdCheckAccum = 0
@@ -528,14 +529,10 @@ local function CheckGCDPop()
     gcdActive = remaining > 0
   end
 
-  -- Pop when GCD ends (normal case: we observe busy -> idle)
   if lastGCDBusy and (not gcdActive) then
     TriggerGCDPop()
   end
 
-  -- Pop when a NEW GCD starts immediately after the old one ended
-  -- (we missed the idle state between samples).
-  -- Only fire this if the previous remaining was already near-zero.
   if lastGCDBusy and gcdActive and (remaining > lastGCDRemaining + 0.02) and (lastGCDRemaining > 0) and (lastGCDRemaining < 0.08) then
     TriggerGCDPop()
   end
@@ -650,7 +647,7 @@ SetMix = function(mix)
 
   -- Normal crossfade (BASE ring always)
   local baseMul = 1
-  if neon then baseMul = NEON_BASE_ALPHA end
+  if neon then baseMul = NEON_ALPHA_BASE end
 
   if mix <= 0.0001 then
     ringTexNormal:SetAlpha(1 * baseMul)
@@ -1375,24 +1372,22 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   return category
 end
 
-local settingsCategory = nil
-
 local function CreateSettingsPanel()
-  if settingsCategory then return settingsCategory end
+  if HC.settingsCategory then return HC.settingsCategory end
   if not Settings then
-    settingsCategory = nil
-    return settingsCategory
+    HC.settingsCategory = nil
+    return HC.settingsCategory
   end
 
   -- If the vertical layout APIs aren't available, fall back to the
   -- full legacy canvas panel as the top-level category.
   if not (Settings.RegisterVerticalLayoutCategory and Settings.RegisterAddOnSetting) then
-    settingsCategory = CreateSettingsPanelLegacy(nil, false)
-    return settingsCategory
+    HC.settingsCategory = CreateSettingsPanelLegacy(nil, false)
+    return HC.settingsCategory
   end
 
   local category, layout = Settings.RegisterVerticalLayoutCategory("Hello Cursor")
-  settingsCategory = category
+  HC.settingsCategory = category
   Settings.RegisterAddOnCategory(category)
 
   local HC_VAR_PREFIX = "HelloCursor_"
@@ -1633,63 +1628,19 @@ local function CreateSettingsPanel()
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
   CreateSettingsPanelLegacy(category, true)
 
-  return settingsCategory
+  return HC.settingsCategory
 end
 
--- ---------------------------------------------------------------------
--- Events
--- ---------------------------------------------------------------------
+HC.CreateSettingsPanel = CreateSettingsPanel
 
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("ADDON_LOADED")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
-eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+HC.DEFAULTS = DEFAULTS
+HC.CopyDefaults = CopyDefaults
+HC.NormalizeHex = NormalizeHex
+HC.Clamp = Clamp
+HC.NearestKey = NearestKey
 
-eventFrame:SetScript("OnEvent", function(_, event, arg1)
-  if event == "ADDON_LOADED" and arg1 == ADDON_NAME then
-    HelloCursorDB = CopyDefaults(HelloCursorDB, DEFAULTS)
-    HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
-    HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
-
-    CaptureCursorNow()
-
-    RefreshVisualsImmediate()
-    UpdateVisibility()
-
-    if not settingsCategory then
-      settingsCategory = CreateSettingsPanel()
-    end
-
-    print("|cFF00FF00HelloCursor:|r v" .. VERSION .. " Loaded. Use |cFFFFA500/hc|r to open options.")
-    return
-  end
-
-  ApplyTintIfNeeded(false)
-  UpdateVisibility()
-end)
-
--- ---------------------------------------------------------------------
--- Slash commands
--- ---------------------------------------------------------------------
-
-SLASH_HELLOCURSOR1 = "/hc"
-SLASH_HELLOCURSOR2 = "/hellocursor"
-
-SlashCmdList.HELLOCURSOR = function(msg)
-  if msg == "toggle" then
-    local nsKey = "HelloCursor_enabled"
-    local current = IsAddonEnabled()
-    local newValue = not current
-    HelloCursorDB.enabled = newValue
-    HelloCursorDB[nsKey] = newValue
-    UpdateVisibility()
-    print(("HelloCursor: %s"):format(HelloCursorDB.enabled and "enabled" or "disabled"))
-    return
-  end
-
-  if settingsCategory and Settings and Settings.OpenToCategory then
-    Settings.OpenToCategory(settingsCategory:GetID())
-  end
-end
+HC.CaptureCursorNow = CaptureCursorNow
+HC.RefreshVisualsImmediate = RefreshVisualsImmediate
+HC.UpdateVisibility = UpdateVisibility
+HC.ApplyTintIfNeeded = ApplyTintIfNeeded
+HC.IsAddonEnabled = IsAddonEnabled
