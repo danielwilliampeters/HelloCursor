@@ -107,6 +107,10 @@ local UnitAffectingCombat = UnitAffectingCombat
 local IsInInstance        = IsInInstance
 local math_abs            = math.abs
 
+local function IsMouselookActive()
+  return (IsMouselooking and IsMouselooking()) and true or false
+end
+
 local function CopyDefaults(dst, src)
   if type(dst) ~= "table" then dst = {} end
   for k, v in pairs(src) do
@@ -537,7 +541,12 @@ local function CheckGCDPop()
   end
 
   -- Spinner / ring base visibility
-  local wantSpinner = HelloCursorDB.showGCDSpinner and gcdActive and (not gcdPopPlaying)
+  -- In neon style we only want the end-of-GCD pop; the spinner wedge
+  -- should remain exclusive to the non-neon (flat) ring.
+  local wantSpinner = HelloCursorDB.showGCDSpinner
+                    and gcdActive
+                    and (not gcdPopPlaying)
+                    and (not IsNeonStyle())
 
   gcdVisualActive = wantSpinner
   suppressFlatRing = wantSpinner
@@ -619,26 +628,23 @@ SetMix = function(mix)
 
   local neon = IsNeonStyle()
 
-  if spinnerActive  then
-    -- If spinner should replace visuals:
-    if spinnerActive  then
-      -- crossfade spinners
-      if gcdSpinnerNormal then gcdSpinnerNormal:SetAlpha(1 - mix) end
-      if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(mix) end
+  if spinnerActive then
+    -- crossfade spinners
+    if gcdSpinnerNormal then gcdSpinnerNormal:SetAlpha(1 - mix) end
+    if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(mix) end
 
-      -- When the spinner is replacing the visuals, hide both the base
-      -- ring and (in neon mode) the neon overlays so the behaviour is
-      -- identical for flat and neon styles.
-      if suppressFlatRing then
-        ringTexNormal:SetAlpha(0)
-        ringTexSmall:SetAlpha(0)
+    -- When the spinner is replacing the visuals, hide both the base
+    -- ring and (in neon mode) the neon overlays so the behaviour is
+    -- identical for flat and neon styles.
+    if suppressFlatRing then
+      ringTexNormal:SetAlpha(0)
+      ringTexSmall:SetAlpha(0)
 
-        if neon then
-          neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(0)
-          neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(0)
-        end
-        return
+      if neon then
+        neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(0)
+        neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(0)
       end
+      return
     end
   end
 
@@ -680,7 +686,7 @@ end
 
 WantsSmallRing = function()
   if not HelloCursorDB.reactiveCursor then return false end
-  return (IsMouselooking and IsMouselooking()) and true or false
+  return IsMouselookActive()
 end
 
 local function SnapToTargetMix()
@@ -729,7 +735,7 @@ UpdateRingPosition = function()
   local cx, cy = GetCursorPosition()
   cx, cy = cx / scale, cy / scale
 
-  local mouselooking = (IsMouselooking and IsMouselooking()) and true or false
+  local mouselooking = IsMouselookActive()
 
   if not mouselooking then
     lastCursorX, lastCursorY = cx, cy
@@ -819,7 +825,7 @@ local function UpdateVisibility()
   if shouldShow then
     local wasShown = ringFrame:IsShown()
 
-    if (IsMouselooking and IsMouselooking()) and (not lastCursorX or not lastCursorY) then
+    if IsMouselookActive() and (not lastCursorX or not lastCursorY) then
       CaptureCursorNow()
     end
 
@@ -911,7 +917,6 @@ ringFrame:SetScript("OnUpdate", function(_, elapsed)
     end
   end
 
-  local targetMix = WantsSmallRing() and 1 or 0
   if tweenActive then
     local t = (GetTime() - tweenStart) / TWEEN_DURATION
     if t >= 1 then
