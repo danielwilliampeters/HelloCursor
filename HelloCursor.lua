@@ -27,6 +27,7 @@ local DEFAULTS = {
   reactiveCursor = true,
   showGCDSpinner = false,
   useNeonRing = true,
+  neonPulseEnabled = true,
 }
 
 -- Authored ring sizes (constant stroke thickness per asset)
@@ -96,8 +97,28 @@ local RING_CANVAS_SIZE = 128
 
 -- Neon overlay alphas
 local NEON_ALPHA_BASE  = 0.95
-local NEON_ALPHA_CORE  = 1.00
-local NEON_ALPHA_INNER = 1.00
+local NEON_ALPHA_CORE  = 0.80
+local NEON_ALPHA_INNER = 0.85
+
+local NEON_GCD_PULSE_ENABLED = true   -- master switch for neon GCD pulsing
+local NEON_GCD_PULSE_SPEED   = 1.6   -- oscillations per second
+
+-- NEW: make the pulse visibly swing (alpha range while pulsing)
+local NEON_PULSE_CORE_MIN  = 0.25
+local NEON_PULSE_CORE_MAX  = 1.00
+local NEON_PULSE_INNER_MIN = 0.20
+local NEON_PULSE_INNER_MAX = 1.00
+
+-- Optional: if you still want intensity to ramp with GCD progress
+local NEON_PULSE_USE_GCD_PROGRESS = false  -- set true if you want ramp-up
+
+local function IsNeonPulseEnabled()
+  -- Default on: treat nil as true so existing configs keep pulsing
+  if HelloCursorDB.neonPulseEnabled == nil then
+    return true
+  end
+  return HelloCursorDB.neonPulseEnabled and true or false
+end
 
 -- ---------------------------------------------------------------------
 -- Small utils
@@ -461,6 +482,25 @@ local gcdVisualActive = false
 local gcdPopPlaying = false
 local suppressFlatRing = false
 local gcdCheckAccum = 0
+local neonPulseStrength = 0
+
+local function UpdateNeonPulseStrength(gcdActive, remaining, duration)
+  if not (NEON_GCD_PULSE_ENABLED and IsNeonPulseEnabled()) then
+    neonPulseStrength = 0
+    return
+  end
+
+  if gcdActive and duration and duration > 0 then
+    if NEON_PULSE_USE_GCD_PROGRESS then
+      local frac = 1 - Clamp(remaining / duration, 0, 1)
+      neonPulseStrength = Clamp(0.35 + 0.65 * frac, 0, 1)
+    else
+      neonPulseStrength = 1
+    end
+  else
+    neonPulseStrength = 0
+  end
+end
 
 -- ---------------------------------------------------------------------
 -- GCD end pop
@@ -515,10 +555,6 @@ local function TriggerGCDPop()
 end
 
 local function CheckGCDPop()
-  if not HelloCursorDB.showGCDSpinner then
-    return
-  end
-
   local now = GetTime()
   local startTime, duration, enabled = GetSpellCooldownCompat(GCD_SPELL_ID)
   local gcdActive = false
@@ -528,6 +564,9 @@ local function CheckGCDPop()
     remaining = (startTime + duration) - now
     gcdActive = remaining > 0
   end
+
+  -- Neon-only GCD pulse strength (0-1) based on progress through the GCD.
+  UpdateNeonPulseStrength(gcdActive, remaining, duration)
 
   if lastGCDBusy and (not gcdActive) then
     TriggerGCDPop()
@@ -662,17 +701,37 @@ SetMix = function(mix)
 
   -- Neon overlays (only when neon style enabled)
   if neon then
+    -- GCD-driven neon pulse (core + inner) while GCD is active.
+    local pulseStrength = neonPulseStrength or 0
+
+    -- Default (no pulse): your normal steady neon
+    local coreBase  = NEON_ALPHA_CORE
+    local innerBase = NEON_ALPHA_INNER
+
+    if pulseStrength > 0 then
+      -- osc: 0..1
+      local osc = 0.5 + 0.5 * math.sin(GetTime() * NEON_GCD_PULSE_SPEED * 2 * math.pi)
+
+      -- Wide, obvious swing while pulsing.
+      -- We blend between steady neon and pulsing neon using pulseStrength.
+      local corePulse  = Lerp(NEON_PULSE_CORE_MIN,  NEON_PULSE_CORE_MAX,  osc)
+      local innerPulse = Lerp(NEON_PULSE_INNER_MIN, NEON_PULSE_INNER_MAX, osc)
+
+      coreBase  = Lerp(coreBase,  corePulse,  pulseStrength)
+      innerBase = Lerp(innerBase, innerPulse, pulseStrength)
+    end
+
     if mix <= 0.0001 then
-      neonCoreNormal:SetAlpha(NEON_ALPHA_CORE);   neonCoreSmall:SetAlpha(0)
-      neonInnerNormal:SetAlpha(NEON_ALPHA_INNER); neonInnerSmall:SetAlpha(0)
+      neonCoreNormal:SetAlpha(coreBase);   neonCoreSmall:SetAlpha(0)
+      neonInnerNormal:SetAlpha(innerBase); neonInnerSmall:SetAlpha(0)
     elseif mix >= 0.9999 then
-      neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(NEON_ALPHA_CORE)
-      neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(NEON_ALPHA_INNER)
+      neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(coreBase)
+      neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(innerBase)
     else
       local aN = 1 - mix
       local aS = mix
-      neonCoreNormal:SetAlpha(aN * NEON_ALPHA_CORE);   neonCoreSmall:SetAlpha(aS * NEON_ALPHA_CORE)
-      neonInnerNormal:SetAlpha(aN * NEON_ALPHA_INNER); neonInnerSmall:SetAlpha(aS * NEON_ALPHA_INNER)
+      neonCoreNormal:SetAlpha(aN * coreBase);   neonCoreSmall:SetAlpha(aS * coreBase)
+      neonInnerNormal:SetAlpha(aN * innerBase); neonInnerSmall:SetAlpha(aS * innerBase)
     end
   else
     -- ensure overlays are invisible if neon is off
@@ -906,12 +965,10 @@ ringFrame:SetScript("OnUpdate", function(_, elapsed)
     end
   end
 
-  if HelloCursorDB.showGCDSpinner then
-    gcdCheckAccum = gcdCheckAccum + (elapsed or 0)
-    if gcdCheckAccum >= GCD_POP_CHECK_INTERVAL then
-      gcdCheckAccum = 0
-      CheckGCDPop()
-    end
+  gcdCheckAccum = gcdCheckAccum + (elapsed or 0)
+  if gcdCheckAccum >= GCD_POP_CHECK_INTERVAL then
+    gcdCheckAccum = 0
+    CheckGCDPop()
   end
 
   if tweenActive then
@@ -928,6 +985,10 @@ ringFrame:SetScript("OnUpdate", function(_, elapsed)
     end
   end
 
+  if IsNeonStyle() and neonPulseStrength > 0 then
+    SetMix(currentMix)
+  end
+
   if UpdateRingPosition then UpdateRingPosition() end
 end)
 
@@ -940,7 +1001,7 @@ local pickBtnRef
 local cbClassRef
 
 local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
-local cbGCDRef, cbHideMenusRef
+local cbGCDRef, cbHideMenusRef, cbNeonPulseRef
 
 local sizeSliderRef
 
@@ -973,6 +1034,7 @@ local function RefreshOptionsUI()
   if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
   if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
   if cbGCDRef then cbGCDRef:SetChecked(HelloCursorDB.showGCDSpinner and true or false) end
+  if cbNeonPulseRef then cbNeonPulseRef:SetChecked(IsNeonPulseEnabled()) end
   if cbHideMenusRef then cbHideMenusRef:SetChecked(HelloCursorDB.hideInMenus and true or false) end
   if cbClassRef then cbClassRef:SetChecked(HelloCursorDB.useClassColor and true or false) end
 
@@ -1074,6 +1136,7 @@ local function ResetToDefaults()
     "useClassColor",
     "colorHex",
     "useNeonRing",
+    "neonPulseEnabled",
   }
 
   for _, key in ipairs(tracked) do
@@ -1232,11 +1295,26 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
       end
     )
 
+    cbNeonPulseRef = MakeCheckbox(
+      "Neon GCD pulse (neon ring only)",
+      function() return IsNeonPulseEnabled() end,
+      function(v) HelloCursorDB.neonPulseEnabled = v end,
+      cbGCDRef, -10,
+      function()
+        if not IsNeonPulseEnabled() then
+          neonPulseStrength = 0
+        end
+        if IsNeonStyle() then
+          SetMix(currentMix)
+        end
+      end
+    )
+
     cbHideMenusRef = MakeCheckbox(
       "Hide ring while game menus are open",
       function() return HelloCursorDB.hideInMenus end,
       function(v) HelloCursorDB.hideInMenus = v end,
-      cbGCDRef, -10,
+      cbNeonPulseRef, -10,
       function()
         UpdateVisibility()
       end
@@ -1481,6 +1559,14 @@ local function CreateSettingsPanel()
         StopTween()
         SnapToTargetMix()
 
+      elseif key == "neonPulseEnabled" then
+        if not IsNeonPulseEnabled() then
+          neonPulseStrength = 0
+        end
+        if IsNeonStyle() then
+          SetMix(currentMix)
+        end
+
       elseif key == "showWorld"
         or key == "showPvE"
         or key == "showPvP"
@@ -1623,6 +1709,12 @@ local function CreateSettingsPanel()
     "useNeonRing",
     "Neon ring style",
     "Replaces the standard ring with a neon-style ring that includes a glowing core."
+  )
+
+  AddCheckbox(
+    "neonPulseEnabled",
+    "Neon GCD pulse",
+    "Controls the pulsing neon effect on the GCD animation when using the neon ring style."
   )
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
