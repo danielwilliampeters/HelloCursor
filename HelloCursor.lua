@@ -847,11 +847,30 @@ local function RefreshVisualsImmediate()
 end
 
 local function UpdateVisibility()
-  if ShouldShowRing() then
+  local shouldShow = ShouldShowRing()
+
+  if shouldShow then
+    local wasShown = ringFrame:IsShown()
+
     if (IsMouselooking and IsMouselooking()) and (not lastCursorX or not lastCursorY) then
       CaptureCursorNow()
     end
+
     ringFrame:Show()
+
+    -- If the ring has just become visible (for example when entering
+    -- combat while a GCD is already in progress), snap the mix state
+    -- to the current mouselook mode and immediately refresh the GCD
+    -- spinner. This prevents a frame where both the large and small
+    -- GCD spinners are fully visible at once.
+    if not wasShown then
+      SnapToTargetMix()
+      if HelloCursorDB.showGCDSpinner then
+        gcdCheckAccum = 0
+        CheckGCDPop()
+      end
+    end
+
   else
     ringFrame:Hide()
   end
