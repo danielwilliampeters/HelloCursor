@@ -14,6 +14,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB.colorHex = HC.NormalizeHex(HelloCursorDB.colorHex) or HC.DEFAULTS.colorHex
     HelloCursorDB.size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 64, 128)
 
+    if HC.SyncRingStyleFlags then
+      HC.SyncRingStyleFlags()
+    end
+
     HC.CaptureCursorNow()
 
     HC.RefreshVisualsImmediate()

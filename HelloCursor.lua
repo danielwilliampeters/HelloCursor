@@ -26,8 +26,7 @@ local DEFAULTS = {
   hideInMenus = true,
   reactiveCursor = true,
   showGCDSpinner = false,
-  useNeonRing = true,
-  neonPulseEnabled = true,
+  classicRingStyle = false,
 }
 
 -- Authored ring sizes (constant stroke thickness per asset)
@@ -101,7 +100,7 @@ local NEON_ALPHA_CORE  = 0.80
 local NEON_ALPHA_INNER = 0.85
 
 local NEON_GCD_PULSE_ENABLED = true   -- master switch for neon GCD pulsing
-local NEON_GCD_PULSE_SPEED   = 1.6   -- oscillations per second
+local NEON_GCD_PULSE_SPEED   = 2.4   -- oscillations per second
 
 -- NEW: make the pulse visibly swing (alpha range while pulsing)
 local NEON_PULSE_CORE_MIN  = 0.25
@@ -112,12 +111,23 @@ local NEON_PULSE_INNER_MAX = 1.00
 -- Optional: if you still want intensity to ramp with GCD progress
 local NEON_PULSE_USE_GCD_PROGRESS = false  -- set true if you want ramp-up
 
-local function IsNeonPulseEnabled()
-  -- Default on: treat nil as true so existing configs keep pulsing
-  if HelloCursorDB.neonPulseEnabled == nil then
-    return true
+local function SyncRingStyleFlags()
+  -- Ensure classicRingStyle is boolean; default is false (neon)
+  if HelloCursorDB.classicRingStyle == nil then
+    -- If legacy value exists, map it ONCE:
+    -- useNeonRing=true => classicRingStyle=false
+    -- useNeonRing=false => classicRingStyle=true
+    if HelloCursorDB.useNeonRing ~= nil then
+      HelloCursorDB.classicRingStyle = (HelloCursorDB.useNeonRing == false)
+    else
+      HelloCursorDB.classicRingStyle = false
+    end
   end
-  return HelloCursorDB.neonPulseEnabled and true or false
+  HelloCursorDB.classicRingStyle = HelloCursorDB.classicRingStyle and true or false
+  HelloCursorDB.useNeonRing = not HelloCursorDB.classicRingStyle
+  -- Keep Settings-backed vars in sync if they exist:
+  HelloCursorDB["HelloCursor_classicRingStyle"] = HelloCursorDB.classicRingStyle
+  HelloCursorDB["HelloCursor_useNeonRing"] = HelloCursorDB.useNeonRing
 end
 
 -- ---------------------------------------------------------------------
@@ -372,7 +382,7 @@ if gcdSpinnerSmall.SetSwipeTexture then
 end
 
 local function IsNeonStyle()
-  return HelloCursorDB.useNeonRing and true or false
+  return not (HelloCursorDB.classicRingStyle and true or false)
 end
 
 local function SetShownSafe(tex, show)
@@ -485,7 +495,12 @@ local gcdCheckAccum = 0
 local neonPulseStrength = 0
 
 local function UpdateNeonPulseStrength(gcdActive, remaining, duration)
-  if not (NEON_GCD_PULSE_ENABLED and IsNeonPulseEnabled()) then
+  if not NEON_GCD_PULSE_ENABLED then
+    neonPulseStrength = 0
+    return
+  end
+
+  if not (HelloCursorDB.showGCDSpinner and IsNeonStyle()) then
     neonPulseStrength = 0
     return
   end
@@ -993,6 +1008,23 @@ ringFrame:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 -- ---------------------------------------------------------------------
+-- Ring style change helper (classic vs neon)
+-- ---------------------------------------------------------------------
+
+local function ApplyRingStyleChange()
+  SyncRingStyleFlags()
+
+  if not IsNeonStyle() then
+    neonPulseStrength = 0
+  end
+
+  RefreshSize()
+  ApplyTintIfNeeded(true)
+  StopTween()
+  SnapToTargetMix()
+end
+
+-- ---------------------------------------------------------------------
 -- Settings UI (Blizzard Settings panel)
 -- ---------------------------------------------------------------------
 
@@ -1001,7 +1033,7 @@ local pickBtnRef
 local cbClassRef
 
 local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
-local cbGCDRef, cbHideMenusRef, cbNeonPulseRef
+local cbGCDRef, cbHideMenusRef, cbClassicStyleRef
 
 local sizeSliderRef
 
@@ -1034,9 +1066,9 @@ local function RefreshOptionsUI()
   if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
   if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
   if cbGCDRef then cbGCDRef:SetChecked(HelloCursorDB.showGCDSpinner and true or false) end
-  if cbNeonPulseRef then cbNeonPulseRef:SetChecked(IsNeonPulseEnabled()) end
   if cbHideMenusRef then cbHideMenusRef:SetChecked(HelloCursorDB.hideInMenus and true or false) end
   if cbClassRef then cbClassRef:SetChecked(HelloCursorDB.useClassColor and true or false) end
+  if cbClassicStyleRef then cbClassicStyleRef:SetChecked(HelloCursorDB.classicRingStyle and true or false) end
 
   if hexEditBox then
     hexEditBox:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
@@ -1056,7 +1088,7 @@ local function SetColorHex(hex)
   if not norm then return end
 
   HelloCursorDB.colorHex = norm
-  HelloCursorDB["HelloCursor_colorHex"] = norm -- ✅ keep Settings-backed value in sync
+  HelloCursorDB["HelloCursor_colorHex"] = norm
 
   ApplyTintIfNeeded(true)
   if hexEditBox then hexEditBox:SetText(norm) end
@@ -1118,8 +1150,14 @@ local function ResetToDefaults()
     HelloCursorDB[k] = v
   end
 
+  HelloCursorDB.neonPulseEnabled = nil
+  HelloCursorDB["HelloCursor_neonPulseEnabled"] = nil
+
   HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
   HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
+
+  -- Ensure style flags are consistent (classic vs neon + legacy useNeonRing)
+  SyncRingStyleFlags()
 
   -- Keep Settings-backed (namespaced) variables in sync so the Blizzard
   -- Settings controls match defaults on reload.
@@ -1135,8 +1173,7 @@ local function ResetToDefaults()
     "size",
     "useClassColor",
     "colorHex",
-    "useNeonRing",
-    "neonPulseEnabled",
+    "classicRingStyle",
   }
 
   for _, key in ipairs(tracked) do
@@ -1295,26 +1332,11 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
       end
     )
 
-    cbNeonPulseRef = MakeCheckbox(
-      "Neon GCD pulse (neon ring only)",
-      function() return IsNeonPulseEnabled() end,
-      function(v) HelloCursorDB.neonPulseEnabled = v end,
-      cbGCDRef, -10,
-      function()
-        if not IsNeonPulseEnabled() then
-          neonPulseStrength = 0
-        end
-        if IsNeonStyle() then
-          SetMix(currentMix)
-        end
-      end
-    )
-
     cbHideMenusRef = MakeCheckbox(
       "Hide ring while game menus are open",
       function() return HelloCursorDB.hideInMenus end,
       function(v) HelloCursorDB.hideInMenus = v end,
-      cbNeonPulseRef, -10,
+      cbGCDRef, -10,
       function()
         UpdateVisibility()
       end
@@ -1375,8 +1397,18 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
         RefreshColourUIEnabledState()
       end
     )
+    
+    cbClassicStyleRef = MakeCheckbox(
+      "Classic ring style",
+      function() return HelloCursorDB.classicRingStyle end,
+      function(v)
+        HelloCursorDB.classicRingStyle = v and true or false
+        ApplyRingStyleChange()
+      end,
+      cbClassRef, -10
+    )
 
-    previousAnchor = cbClassRef
+    previousAnchor = cbClassicStyleRef
   end
 
   local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -1455,6 +1487,10 @@ local function CreateSettingsPanel()
   if not Settings then
     HC.settingsCategory = nil
     return HC.settingsCategory
+  end
+
+  if HC.SyncRingStyleFlags then
+    HC.SyncRingStyleFlags()
   end
 
   -- If the vertical layout APIs aren't available, fall back to the
@@ -1546,26 +1582,17 @@ local function CreateSettingsPanel()
       elseif key == "showGCDSpinner" then
         ApplyTintIfNeeded(true)
         if not HelloCursorDB.showGCDSpinner then
+          neonPulseStrength = 0
+
           if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
-          if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
+          if gcdSpinnerSmall  then gcdSpinnerSmall:Hide() end
           gcdVisualActive = false
           suppressFlatRing = false
           if SetMix then SetMix(currentMix) end
         end
-        
-      elseif key == "useNeonRing" then
-        RefreshSize()
-        ApplyTintIfNeeded(true)
-        StopTween()
-        SnapToTargetMix()
 
-      elseif key == "neonPulseEnabled" then
-        if not IsNeonPulseEnabled() then
-          neonPulseStrength = 0
-        end
-        if IsNeonStyle() then
-          SetMix(currentMix)
-        end
+      elseif key == "classicRingStyle" then
+        ApplyRingStyleChange()
 
       elseif key == "showWorld"
         or key == "showPvE"
@@ -1607,7 +1634,7 @@ local function CreateSettingsPanel()
 
     local setting = RegisterSetting(key, name, defaultValue)
     OnChangedFor(key, setting)
-    CreateCheckboxControl(setting, tooltip)
+    local control = CreateCheckboxControl(setting, tooltip)
     return setting
   end
 
@@ -1645,7 +1672,15 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "enabled",
     "Enable Hello Cursor",
-    "Enables or disables Hello Cursor.\n\nChanges require a UI reload."
+    "Turns Hello Cursor on or off.\n\nChanges require a UI reload."
+  )
+
+  AddHeader("Visibility")
+
+  AddCheckbox(
+    "hideInMenus",
+    "Hide while game menus are open",
+    "Hide the cursor ring while the main game menus are open."
   )
 
   AddCheckbox(
@@ -1656,65 +1691,55 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "showPvE",
-    "Show in dungeons / delves / raids",
-    "Show the cursor ring in 5-player dungeons, delves, and raids."
+    "Show in dungeons, delves, and raids",
+    "Show the cursor ring in dungeons, delves, and raids."
   )
 
   AddCheckbox(
     "showPvP",
-    "Show in battlegrounds / arena",
+    "Show in battlegrounds and arenas",
     "Show the cursor ring in battlegrounds and arenas."
   )
 
   AddCheckbox(
     "showInCombat",
-    "Show in combat",
+    "Always show in combat",
     "Always show the cursor ring while you are in combat, regardless of location."
-  )
-
-  AddCheckbox(
-    "hideInMenus",
-    "Hide ring while game menus are open",
-    "Hide the cursor ring while the main game menus are visible."
-  )
-
-  AddCheckbox(
-    "reactiveCursor",
-    "Reactive cursor",
-    "Shrinks the cursor ring while holding right mouse."
-  )
-
-  AddCheckbox(
-    "showGCDSpinner",
-    "Global cooldown (GCD) animation",
-    "Show a subtle animation on the ring that tracks the global cooldown."
   )
 
   AddHeader("Appearance")
 
+  AddCheckbox(
+    "classicRingStyle",
+    "Classic ring style",
+    "Use a flat ring style without neon effects."
+  )
+
   AddSlider(
     "size",
     "Ring size",
-    "Adjust the overall size of the cursor ring.",
+    "Adjust the size of the cursor ring.",
     64, 128, 16
   )
 
   AddCheckbox(
     "useClassColor",
     "Use class colour",
-    "Tint the ring using your class colour instead of a custom colour.\n\nRing colour (hex & picker) is configured in Advanced settings."
+    "Tint the ring using your class colour.\n\nCustom colour is configured in Advanced settings."
+  )
+
+  AddHeader("Behaviour")
+
+  AddCheckbox(
+    "showGCDSpinner",
+    "Global cooldown animation",
+    "Show an animation on the ring that tracks the global cooldown."
   )
 
   AddCheckbox(
-    "useNeonRing",
-    "Neon ring style",
-    "Replaces the standard ring with a neon-style ring that includes a glowing core."
-  )
-
-  AddCheckbox(
-    "neonPulseEnabled",
-    "Neon GCD pulse",
-    "Controls the pulsing neon effect on the GCD animation when using the neon ring style."
+    "reactiveCursor",
+    "Shrink while mouselooking",
+    "Reduces the ring size while holding right mouse button."
   )
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
@@ -1736,3 +1761,4 @@ HC.RefreshVisualsImmediate = RefreshVisualsImmediate
 HC.UpdateVisibility = UpdateVisibility
 HC.ApplyTintIfNeeded = ApplyTintIfNeeded
 HC.IsAddonEnabled = IsAddonEnabled
+HC.SyncRingStyleFlags = SyncRingStyleFlags
