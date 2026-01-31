@@ -24,7 +24,7 @@ local DEFAULTS = {
   showPvP = true,
   showInCombat = true,
   hideInMenus = true,
-  reactiveCursor = true,
+  reactiveCursor = false,
   showGCDSpinner = false,
   classicRingStyle = false,
 }
@@ -175,6 +175,10 @@ local function NormalizeHex(hex)
   return nil
 end
 
+local function GetNormalizedColorHex()
+  return NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
+end
+
 local function HexToRGBA(hex)
   hex = NormalizeHex(hex) or DEFAULTS.colorHex
 
@@ -190,6 +194,10 @@ local function HexToRGBA(hex)
     local b = tonumber(hex:sub(7, 8), 16) or 216
     return r / 255, g / 255, b / 255, a / 255
   end
+end
+
+local function GetNormalizedSize()
+  return Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
 end
 
 local function RGBAtoHex(r, g, b)
@@ -294,7 +302,13 @@ local function ShouldShowRing()
     return false
   end
 
-  if (not forceShowWhilePickingColour) and HelloCursorDB.hideInMenus and IsAnyMenuOpen() then
+  -- While the colour picker is open, force the ring to be visible
+  -- regardless of per-zone / menu visibility settings.
+  if forceShowWhilePickingColour then
+    return true
+  end
+
+  if HelloCursorDB.hideInMenus and IsAnyMenuOpen() then
     return false
   end
 
@@ -381,6 +395,11 @@ if gcdSpinnerSmall.SetSwipeTexture then
   gcdSpinnerSmall:SetSwipeTexture(RING_SMALL_TEX_BY_SIZE[96])
 end
 
+local function HideGCDSpinners()
+  if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
+  if gcdSpinnerSmall  then gcdSpinnerSmall:Hide() end
+end
+
 local function IsNeonStyle()
   return not (HelloCursorDB.classicRingStyle and true or false)
 end
@@ -396,14 +415,18 @@ end
 
 local function SetStyleVisibility()
   local neon = IsNeonStyle()
+  local showSmall = not forceShowWhilePickingColour
 
+  -- While using the colour picker we completely disable the small
+  -- ring textures so only the default ring can ever be shown,
+  -- regardless of mix or any other visual state.
   SetShownSafe(ringTexNormal, true)
-  SetShownSafe(ringTexSmall,  true)
+  SetShownSafe(ringTexSmall,  showSmall)
 
   SetShownSafe(neonCoreNormal,  neon)
-  SetShownSafe(neonCoreSmall,   neon)
+  SetShownSafe(neonCoreSmall,   neon and showSmall)
   SetShownSafe(neonInnerNormal, neon)
-  SetShownSafe(neonInnerSmall,  neon)
+  SetShownSafe(neonInnerSmall,  neon and showSmall)
 end
 
 -- ---------------------------------------------------------------------
@@ -445,7 +468,7 @@ local function ComputeTint()
   end
 
   local r, g, b, a = HexToRGBA(HelloCursorDB.colorHex)
-  return r, g, b, a, ("hex:%s"):format(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+  return r, g, b, a, ("hex:%s"):format(GetNormalizedColorHex())
 end
 
 local function ApplyTintIfNeeded(force)
@@ -544,8 +567,7 @@ gcdPopAnim:SetScript("OnPlay", function()
   gcdVisualActive = false
   suppressFlatRing = false
 
-  if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
-  if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
+  HideGCDSpinners()
 
   if SetMix then SetMix(currentMix) end
 end)
@@ -609,15 +631,6 @@ local function CheckGCDPop()
     ringTexNormal:SetAlpha(0)
     ringTexSmall:SetAlpha(0)
 
-    if IsNeonStyle() then
-      neonCoreNormal:SetAlpha(0)
-      neonCoreSmall:SetAlpha(0)
-      neonInnerNormal:SetAlpha(0)
-      neonInnerSmall:SetAlpha(0)
-    end
-  end
-
-  if wantSpinner then
     if gcdSpinnerNormal and gcdSpinnerNormal.SetCooldown then
       gcdSpinnerNormal:SetCooldown(startTime, duration)
       gcdSpinnerNormal:Show()
@@ -631,8 +644,7 @@ local function CheckGCDPop()
     if gcdSpinnerSmall  then gcdSpinnerSmall:SetAlpha(currentMix) end
     
   else
-    if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
-    if gcdSpinnerSmall then gcdSpinnerSmall:Hide() end
+    HideGCDSpinners()
   end
 
   gcdVisualActive = wantSpinner
@@ -756,6 +768,12 @@ SetMix = function(mix)
 end
 
 WantsSmallRing = function()
+  -- While the colour picker is active, always use the default (large)
+  -- ring size and ignore the mouselook-based small ring.
+  if forceShowWhilePickingColour then
+    return false
+  end
+
   if not HelloCursorDB.reactiveCursor then return false end
   return IsMouselookActive()
 end
@@ -839,7 +857,7 @@ end
 -- ---------------------------------------------------------------------
 
 local function RefreshSize()
-  local size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
+  local size = GetNormalizedSize()
   HelloCursorDB.size = size
 
   ringFrame:SetSize(RING_CANVAS_SIZE, RING_CANVAS_SIZE)
@@ -927,6 +945,12 @@ local visElapsed = 0
 local lastMenuOpen = nil
 local lastShouldShow = nil
 
+local function ForceVisibilityRecompute()
+  lastMenuOpen = nil
+  lastShouldShow = nil
+  UpdateVisibility()
+end
+
 visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
   -- If the addon is off, do nothing.
   if not IsAddonEnabled() then
@@ -971,6 +995,30 @@ local lastTargetMix = 0
 
 ringFrame:SetScript("OnUpdate", function(_, elapsed)
   if not ringFrame:IsShown() then return end
+
+  -- While the colour picker is active, completely lock the ring to
+  -- the default (large) size and skip all reactive mouselook tweening.
+  if forceShowWhilePickingColour then
+    lastTargetMix = 0
+
+    -- hard stop any tweening / mix changes
+    if tweenActive then StopTween() end
+    SetMix(0)
+
+    -- absolutely no GCD logic while picker is open
+    gcdCheckAccum = 0
+    lastGCDBusy = false
+    lastGCDRemaining = 0
+    gcdVisualActive = false
+    suppressFlatRing = false
+    neonPulseStrength = 0
+
+    HideGCDSpinners()
+    if gcdPopAnim and gcdPopAnim:IsPlaying() then gcdPopAnim:Stop() end
+
+    if UpdateRingPosition then UpdateRingPosition() end
+    return
+  end
 
   local targetMix = WantsSmallRing() and 1 or 0
   if targetMix ~= lastTargetMix then
@@ -1071,11 +1119,11 @@ local function RefreshOptionsUI()
   if cbClassicStyleRef then cbClassicStyleRef:SetChecked(HelloCursorDB.classicRingStyle and true or false) end
 
   if hexEditBox then
-    hexEditBox:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+    hexEditBox:SetText(GetNormalizedColorHex())
   end
 
   if sizeSliderRef then
-    local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
+    local v = GetNormalizedSize()
     local snappedKey = NearestKey(RING_TEX_BY_SIZE, v) or 96
     sizeSliderRef:SetValue(snappedKey)
   end
@@ -1103,8 +1151,8 @@ local function OpenColorPicker()
     return
   end
 
-  local r, g, b = HexToRGBA(HelloCursorDB.colorHex)
-  local prevHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
+  local r, g, b, _ = HexToRGBA(HelloCursorDB.colorHex)
+  local prevHex = GetNormalizedColorHex()
 
   local function ApplyFromPicker()
     local nr, ng, nb = picker:GetColorRGB()
@@ -1129,6 +1177,8 @@ local function OpenColorPicker()
   -- While picking a colour, show the ring even if menus are open
   forceShowWhilePickingColour = true
   CaptureCursorNow()
+  StopTween()
+  SetMix(0)
   UpdateVisibility()
   StartPickerCursorDriver()
 
@@ -1138,7 +1188,15 @@ local function OpenColorPicker()
     ColorPickerFrame:HookScript("OnHide", function()
       forceShowWhilePickingColour = false
       StopPickerCursorDriver()
-      UpdateVisibility()
+      StopTween()
+
+      ForceVisibilityRecompute()
+ 
+      -- resync GCD visuals immediately after leaving picker
+      if HelloCursorDB.showGCDSpinner then
+        gcdCheckAccum = 0
+        CheckGCDPop()
+      end
     end)
   end
 
@@ -1146,15 +1204,22 @@ local function OpenColorPicker()
 end
 
 local function ResetToDefaults()
+  for k in pairs(HelloCursorDB) do
+    if type(k) == "string" and k:match("^HelloCursor_") then
+      HelloCursorDB[k] = nil
+    end
+  end
+
   for k, v in pairs(DEFAULTS) do
     HelloCursorDB[k] = v
   end
 
   HelloCursorDB.neonPulseEnabled = nil
   HelloCursorDB["HelloCursor_neonPulseEnabled"] = nil
-
-  HelloCursorDB.colorHex = NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
-  HelloCursorDB.size = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
+  HelloCursorDB.useNeonRing = nil
+  
+  HelloCursorDB.colorHex = DEFAULTS.colorHex
+  HelloCursorDB.size = DEFAULTS.size
 
   -- Ensure style flags are consistent (classic vs neon + legacy useNeonRing)
   SyncRingStyleFlags()
@@ -1431,7 +1496,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   hexEditBox:SetAutoFocus(false)
 
   hexEditBox:SetScript("OnShow", function(self)
-    self:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+    self:SetText(GetNormalizedColorHex())
     RefreshColourUIEnabledState()
   end)
 
@@ -1446,13 +1511,13 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
     if norm then
       SetColorHex(norm)
     else
-      self:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+      self:SetText(GetNormalizedColorHex())
     end
     self:ClearFocus()
   end)
 
   hexEditBox:SetScript("OnEscapePressed", function(self)
-    self:SetText(NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex)
+    self:SetText(GetNormalizedColorHex())
     self:ClearFocus()
   end)
 
@@ -1489,9 +1554,9 @@ local function CreateSettingsPanel()
     return HC.settingsCategory
   end
 
-  if HC.SyncRingStyleFlags then
-    HC.SyncRingStyleFlags()
-  end
+  -- Sync style flags early using the local function; the
+  -- HC.SyncRingStyleFlags alias is only assigned later.
+  SyncRingStyleFlags()
 
   -- If the vertical layout APIs aren't available, fall back to the
   -- full legacy canvas panel as the top-level category.
@@ -1549,7 +1614,7 @@ local function CreateSettingsPanel()
     -- Guard against re-entrant callbacks (Reset to defaults can cause cascades)
     local inCallback = false
 
-    Settings.SetOnValueChangedCallback(varName, function()
+    local handler = function()
       if inCallback then return end
       inCallback = true
 
@@ -1562,7 +1627,7 @@ local function CreateSettingsPanel()
       if key == "size" then
         -- Snap our stored value, but DO NOT call setting:SetValue() here
         -- (that can recurse during "Reset to defaults" and blow the stack).
-        local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
+        local v = GetNormalizedSize()
         local snappedKey = NearestKey(RING_TEX_BY_SIZE, v) or 96
 
         HelloCursorDB.size = snappedKey
@@ -1584,8 +1649,7 @@ local function CreateSettingsPanel()
         if not HelloCursorDB.showGCDSpinner then
           neonPulseStrength = 0
 
-          if gcdSpinnerNormal then gcdSpinnerNormal:Hide() end
-          if gcdSpinnerSmall  then gcdSpinnerSmall:Hide() end
+          HideGCDSpinners()
           gcdVisualActive = false
           suppressFlatRing = false
           if SetMix then SetMix(currentMix) end
@@ -1600,14 +1664,17 @@ local function CreateSettingsPanel()
         or key == "showInCombat"
         or key == "hideInMenus"
         or key == "enabled" then
-
-        lastMenuOpen = nil
-        lastShouldShow = nil
-        UpdateVisibility()
+        ForceVisibilityRecompute()
       end
 
       inCallback = false
-    end)
+    end
+
+    -- Different client builds use different signatures here; try both.
+    local ok = pcall(Settings.SetOnValueChangedCallback, setting, handler)
+    if not ok then
+      pcall(Settings.SetOnValueChangedCallback, varName, handler)
+    end
   end
 
   -- Register colorHex so the Blizzard "Defaults" button resets it too,
@@ -1672,7 +1739,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "enabled",
     "Enable Hello Cursor",
-    "Turns Hello Cursor on or off.\n\nChanges require a UI reload."
+    "Turns Hello Cursor on or off."
   )
 
   AddHeader("Visibility")
