@@ -1,11 +1,15 @@
 ## Interface: 120000
-## Title: HelloCursor
+## Title: Hello Cursor
 ## Notes: Adds a configurable ring around the cursor. /hc
 ## Author: Daniel Peters
-## Version: 2.0.0
+## Version: 2.0.1
 ## SavedVariables: HelloCursorDB
 ## Category: User Interface
-## IconTexture: Interface\AddOns\HelloCursor\icon.tga
+## IconTexture: Interface\AddOns\HelloCursor\Assets\Icons\icon.tga
 
+Lib\Util.lua
+Core\Textures.lua
+Core\Tunables.lua
 HelloCursor.lua
-HelloCursor_Events.lua
+Config\Settings.lua
+Core\Events.lua

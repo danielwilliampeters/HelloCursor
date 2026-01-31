@@ -1,3 +1,5 @@
+-- HelloCursor Core Events Handler
+
 local HC = HelloCursor
 if not HC then return end
 
