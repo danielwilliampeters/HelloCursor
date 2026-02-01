@@ -42,7 +42,7 @@ local hexEditBox
 local pickBtnRef
 local cbClassRef
 
-local cbWorldRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
+local cbWorldRef, cbHousingRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
 local cbGCDRef, cbHideMenusRef, cbClassicStyleRef
 
 local sizeSliderRef
@@ -71,6 +71,7 @@ end
 
 local function RefreshOptionsUI()
   if cbWorldRef then cbWorldRef:SetChecked(HelloCursorDB.showWorld and true or false) end
+  if cbHousingRef then cbHousingRef:SetChecked(HelloCursorDB.showHousing and true or false) end
   if cbPvERef then cbPvERef:SetChecked(HelloCursorDB.showPvE and true or false) end
   if cbPvPRef then cbPvPRef:SetChecked(HelloCursorDB.showPvP and true or false) end
   if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
@@ -188,6 +189,7 @@ local function ResetToDefaults()
   local tracked = {
     "enabled",
     "showWorld",
+    "showHousing",
     "showPvE",
     "showPvP",
     "showInCombat",
@@ -309,11 +311,18 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
       visHeader, -10
     )
 
+    cbHousingRef = MakeCheckbox(
+      "Show in housing",
+      function() return HelloCursorDB.showHousing end,
+      function(v) HelloCursorDB.showHousing = v end,
+      cbWorldRef, -10
+    )
+
     cbPvERef = MakeCheckbox(
       "Show in dungeons / delves / raids",
       function() return HelloCursorDB.showPvE end,
       function(v) HelloCursorDB.showPvE = v end,
-      cbWorldRef, -10
+      cbHousingRef, -10
     )
 
     cbPvPRef = MakeCheckbox(
@@ -626,6 +635,7 @@ local function CreateSettingsPanel()
         HC.ApplyRingStyleChange()
 
       elseif key == "showWorld"
+        or key == "showHousing"
         or key == "showPvE"
         or key == "showPvP"
         or key == "showInCombat"
@@ -720,6 +730,12 @@ local function CreateSettingsPanel()
     "showWorld",
     "Show in world",
     "Show the cursor ring in open world zones."
+  )
+
+  AddCheckbox(
+    "showHousing",
+    "Show in player housing",
+    "Show the cursor ring while inside player housing (houses and neighbourhoods)."
   )
 
   AddCheckbox(

@@ -20,6 +20,7 @@ local DEFAULTS = {
   useClassColor = false,
   size = 96,
   showWorld = true,
+  showHousing = false,
   showPvE = true,
   showPvP = true,
   showInCombat = true,
@@ -93,9 +94,31 @@ local function IsAnyMenuOpen()
   return false
 end
 
+local function IsInHousingZone()
+  if not C_Housing then return false end
+
+  if C_Housing.IsInsideHouseOrPlot and C_Housing.IsInsideHouseOrPlot() then
+    return true
+  end
+
+  if C_Housing.IsInsideHouse and C_Housing.IsInsideHouse() then
+    return true
+  end
+
+  if C_Housing.IsOnNeighborhoodMap and C_Housing.IsOnNeighborhoodMap() then
+    return true
+  end
+
+  return false
+end
+
 local function IsAllowedInZone()
   if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
     return true
+  end
+
+  if IsInHousingZone() then
+    return HelloCursorDB.showHousing ~= false
   end
 
   local inInstance, instanceType = IsInInstance()
