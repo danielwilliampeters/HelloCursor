@@ -800,14 +800,14 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "reactiveCursor",
-    "Shrink while mouselooking",
-    "Reduces the ring size while holding right mouse button."
+    "Shrink while mouselooking (RMB)",
+    "Reduces the ring size while holding the right mouse button to turn the camera."
   )
 
   AddCheckbox(
     "showWhileMouselooking",
-    "Show while mouselooking",
-    "Shows the ring while holding right mouse button, even in zones where it would normally be hidden."
+    "Show while mouselooking (RMB)",
+    "Shows the ring while holding the right mouse button, even in zones where it would normally be hidden."
   )
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
