@@ -1,4 +1,4 @@
-# HelloCursor
+# Hello Cursor
 
 A World of Warcraft addon that adds a smooth, highly visible ring around your mouse cursor, making it much easier to track during combat, fast camera movement, and busy encounters.
 

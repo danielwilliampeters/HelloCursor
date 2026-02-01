@@ -1,4 +1,4 @@
--- HelloCursor texture path tables
+-- Hello Cursor texture path tables
 
 HelloCursor = HelloCursor or {}
 local HC = HelloCursor

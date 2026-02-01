@@ -1,11 +1,11 @@
--- HelloCursor tunable constants
+-- Hello Cursor tunable constants
 
 HelloCursor = HelloCursor or {}
 local HC = HelloCursor
 
 HC.TUNE = {
   -- Tweening and GCD polling
-  TWEEN_DURATION         = 0.08,
+  TWEEN_DURATION         = 0.08, -- duration for visibility/fade tweens
   GCD_SPELL_ID           = 61304, -- "Global Cooldown"
   GCD_POP_CHECK_INTERVAL = 0.02,  -- interval for polling GCD state
 
@@ -33,6 +33,5 @@ HC.TUNE = {
   NEON_PULSE_INNER_MIN = 0.20,
   NEON_PULSE_INNER_MAX = 1.00,
 
-  -- Optional: if you still want intensity to ramp with GCD progress
   NEON_PULSE_USE_GCD_PROGRESS = false,  -- set true if you want ramp-up
 }

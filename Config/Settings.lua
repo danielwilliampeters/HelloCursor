@@ -1,4 +1,4 @@
--- HelloCursor settings & options UI
+-- Hello Cursor settings & options UI
 
 local ADDON_NAME = ...
 
@@ -42,7 +42,7 @@ local hexEditBox
 local pickBtnRef
 local cbClassRef
 
-local cbWorldRef, cbHousingRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef
+local cbWorldRef, cbHousingRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef, cbMouselookShowRef
 local cbGCDRef, cbHideMenusRef, cbClassicStyleRef
 
 local sizeSliderRef
@@ -76,6 +76,7 @@ local function RefreshOptionsUI()
   if cbPvPRef then cbPvPRef:SetChecked(HelloCursorDB.showPvP and true or false) end
   if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
   if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
+  if cbMouselookShowRef then cbMouselookShowRef:SetChecked(HelloCursorDB.showWhileMouselooking and true or false) end
   if cbGCDRef then cbGCDRef:SetChecked(HelloCursorDB.showGCDSpinner and true or false) end
   if cbHideMenusRef then cbHideMenusRef:SetChecked(HelloCursorDB.hideInMenus and true or false) end
   if cbClassRef then cbClassRef:SetChecked(HelloCursorDB.useClassColor and true or false) end
@@ -193,6 +194,7 @@ local function ResetToDefaults()
     "showPvE",
     "showPvP",
     "showInCombat",
+    "showWhileMouselooking",
     "reactiveCursor",
     "showGCDSpinner",
     "hideInMenus",
@@ -355,11 +357,21 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
       end
     )
 
+    cbMouselookShowRef = MakeCheckbox(
+      "Always show while mouselooking",
+      function() return HelloCursorDB.showWhileMouselooking end,
+      function(v) HelloCursorDB.showWhileMouselooking = v end,
+      cbReactiveRef, -10,
+      function()
+        UpdateVisibility()
+      end
+    )
+
     cbGCDRef = MakeCheckbox(
       "Global cooldown (GCD) animation",
       function() return HelloCursorDB.showGCDSpinner end,
       function(v) HelloCursorDB.showGCDSpinner = v end,
-      cbReactiveRef, -10,
+      cbMouselookShowRef, -10,
       function()
         ApplyTintIfNeeded(true)
       end
@@ -639,6 +651,7 @@ local function CreateSettingsPanel()
         or key == "showPvE"
         or key == "showPvP"
         or key == "showInCombat"
+        or key == "showWhileMouselooking"
         or key == "hideInMenus"
         or key == "enabled" then
         ForceVisibilityRecompute()
@@ -789,6 +802,12 @@ local function CreateSettingsPanel()
     "reactiveCursor",
     "Shrink while mouselooking",
     "Reduces the ring size while holding right mouse button."
+  )
+
+  AddCheckbox(
+    "showWhileMouselooking",
+    "Show while mouselooking",
+    "Shows the ring while holding right mouse button, even in zones where it would normally be hidden."
   )
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)

@@ -1,4 +1,4 @@
--- HelloCursor: cursor ring addon (Retail)
+-- Hello Cursor: cursor ring addon (Retail)
 
 local ADDON_NAME = ...
 local VERSION = C_AddOns.GetAddOnMetadata(ADDON_NAME, "Version") or "dev"
@@ -25,6 +25,7 @@ local DEFAULTS = {
   showPvP = true,
   showInCombat = true,
   hideInMenus = true,
+  showWhileMouselooking = false,
   reactiveCursor = false,
   showGCDSpinner = false,
   classicRingStyle = false,
@@ -166,6 +167,13 @@ local function ShouldShowRing()
 
   if HelloCursorDB.hideInMenus and IsAnyMenuOpen() then
     return false
+  end
+
+  -- Optional override: always show the ring while mouselooking,
+  -- even if the current zone would normally hide it. This still
+  -- respects the "hide in menus" rule above.
+  if HelloCursorDB.showWhileMouselooking and IsMouselookActive() then
+    return true
   end
 
   return IsAllowedInZone()
@@ -778,27 +786,44 @@ local function UpdateVisibility()
   if shouldShow then
     local wasShown = ringFrame:IsShown()
 
-    if IsMouselookActive() and (not lastCursorX or not lastCursorY) then
-      CaptureCursorNow()
-    end
-
-    ringFrame:Show()
-
-    -- If the ring has just become visible (for example when entering
-    -- combat while a GCD is already in progress), snap the mix state
-    -- to the current mouselook mode and immediately refresh the GCD
-    -- spinner. This prevents a frame where both the large and small
-    -- GCD spinners are fully visible at once.
+    -- If we're about to SHOW the ring (especially from hidden state),
+    -- snap the cursor position + anchor BEFORE the first visible frame.
     if not wasShown then
-      SnapToTargetMix()
+      CaptureCursorNow()
+      if UpdateRingPosition then UpdateRingPosition() end
+
+      -- If the ring is appearing due to "show while mouselooking",
+      -- force it to start at the LARGE ring on the first frame.
+      if HelloCursorDB.showWhileMouselooking
+        and HelloCursorDB.reactiveCursor
+        and IsMouselookActive()
+      then
+        -- hard reset the mix so it *starts* big then the OnUpdate tween shrinks it
+        StopTween()
+        currentMix = 0
+        SetMix(0)
+        -- optional: keep this consistent with your OnUpdate target tracking
+        -- lastTargetMix = 0
+      else
+        -- normal behaviour
+        SnapToTargetMix()
+      end
+
       if HelloCursorDB.showGCDSpinner then
         gcdCheckAccum = 0
         CheckGCDPop()
       end
     end
 
+    ringFrame:Show()
+
   else
     ringFrame:Hide()
+
+    -- Optional but recommended: clear cached cursor so next show always
+    -- re-captures and never uses a stale anchor.
+    lastCursorX, lastCursorY = nil, nil
+    wasMouselooking = false
   end
 end
 
@@ -808,10 +833,12 @@ local visibilityDriver = CreateFrame("Frame")
 local visElapsed = 0
 local lastMenuOpen = nil
 local lastShouldShow = nil
+local lastMouselookActive = nil
 
 local function ForceVisibilityRecompute()
   lastMenuOpen = nil
   lastShouldShow = nil
+  lastMouselookActive = nil
   UpdateVisibility()
 end
 
@@ -825,27 +852,21 @@ visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
     return
   end
 
-  -- If we aren't hiding in menus, there is no reason to poll menus.
-  if not HelloCursorDB.hideInMenus then
-    -- Still ensure visibility rules are respected if something else changed.
-    -- (Very cheap because ShouldShowRing() early-outs fast.)
-    if lastShouldShow == nil then
-      UpdateVisibility()
-      lastShouldShow = ringFrame:IsShown()
-    end
-    return
-  end
-
   visElapsed = visElapsed + (elapsed or 0)
-  if visElapsed < 0.10 then return end -- 10Hz is plenty for menu open/close
+  if visElapsed < 0.10 then return end -- 10Hz is plenty for these checks
   visElapsed = 0
 
-  local menuOpen = IsAnyMenuOpen()
+  local menuOpen = HelloCursorDB.hideInMenus and IsAnyMenuOpen() or false
+  local mouselookActive = IsMouselookActive()
 
   -- Only recompute visibility if menu state flipped (open/close),
-  -- or if we don't have a baseline yet.
-  if lastMenuOpen == nil or menuOpen ~= lastMenuOpen then
+  -- mouselook state changed (for the override), or if we don't have a baseline yet.
+  if lastMenuOpen == nil
+    or menuOpen ~= lastMenuOpen
+    or (HelloCursorDB.showWhileMouselooking and mouselookActive ~= lastMouselookActive)
+  then
     lastMenuOpen = menuOpen
+    lastMouselookActive = mouselookActive
     UpdateVisibility()
     lastShouldShow = ringFrame:IsShown()
   end

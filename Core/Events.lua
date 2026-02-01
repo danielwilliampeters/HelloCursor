@@ -1,4 +1,4 @@
--- HelloCursor Core Events Handler
+-- Hello Cursor Core Events Handler
 
 local HC = HelloCursor
 if not HC then return end
