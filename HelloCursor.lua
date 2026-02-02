@@ -65,6 +65,20 @@ local function IsMouselookActive()
   return (IsMouselooking and IsMouselooking()) and true or false
 end
 
+local rmbDownAt = 0
+local rmbIsDown = false
+local RMB_HOLD_THRESHOLD = 0.12
+
+local function IsIntentionalMouselookActive()
+  if not IsMouselookActive() then return false end
+  if not rmbIsDown then return false end
+
+  local downAt = rmbDownAt or 0
+  if downAt <= 0 then return false end
+
+  return (GetTime() - downAt) >= RMB_HOLD_THRESHOLD
+end
+
 local function GetNormalizedColorHex()
   return (HC.Util and HC.Util.NormalizeHex and HC.Util.NormalizeHex(HelloCursorDB.colorHex)) or DEFAULTS.colorHex
 end
@@ -172,7 +186,7 @@ local function ShouldShowRing()
   -- Optional override: always show the ring while mouselooking,
   -- even if the current zone would normally hide it. This still
   -- respects the "hide in menus" rule above.
-  if HelloCursorDB.showWhileMouselooking and IsMouselookActive() then
+  if HelloCursorDB.showWhileMouselooking and IsIntentionalMouselookActive() then
     return true
   end
 
@@ -647,7 +661,7 @@ WantsSmallRing = function()
   end
 
   if not HelloCursorDB.reactiveCursor then return false end
-  return IsMouselookActive()
+  return IsIntentionalMouselookActive()
 end
 
 local function SnapToTargetMix()
@@ -719,7 +733,16 @@ end
 if WorldFrame and WorldFrame.HookScript then
   WorldFrame:HookScript("OnMouseDown", function(_, button)
     if button == "RightButton" then
+      rmbIsDown = true
+      rmbDownAt = GetTime()
       CaptureCursorNow()
+    end
+  end)
+
+  WorldFrame:HookScript("OnMouseUp", function(_, button)
+    if button == "RightButton" then
+      rmbIsDown = false
+      rmbDownAt = 0
     end
   end)
 end
@@ -796,7 +819,7 @@ local function UpdateVisibility()
       -- force it to start at the LARGE ring on the first frame.
       if HelloCursorDB.showWhileMouselooking
         and HelloCursorDB.reactiveCursor
-        and IsMouselookActive()
+        and IsIntentionalMouselookActive()
       then
         -- hard reset the mix so it *starts* big then the OnUpdate tween shrinks it
         StopTween()
@@ -857,7 +880,7 @@ visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
   visElapsed = 0
 
   local menuOpen = HelloCursorDB.hideInMenus and IsAnyMenuOpen() or false
-  local mouselookActive = IsMouselookActive()
+  local mouselookActive = IsIntentionalMouselookActive()
 
   -- Only recompute visibility if menu state flipped (open/close),
   -- mouselook state changed (for the override), or if we don't have a baseline yet.
