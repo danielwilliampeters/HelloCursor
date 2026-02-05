@@ -7,8 +7,6 @@ local HC = HelloCursor
 
 local DEFAULTS = HC.DEFAULTS
 local NormalizeHex = HC.NormalizeHex
-local Clamp = HC.Clamp
-local NearestKey = HC.NearestKey
 
 local CaptureCursorNow = HC.CaptureCursorNow
 local RefreshVisualsImmediate = HC.RefreshVisualsImmediate
@@ -44,8 +42,6 @@ local cbClassRef
 
 local cbWorldRef, cbHousingRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef, cbMouselookShowRef
 local cbGCDRef, cbHideMenusRef, cbClassicStyleRef
-
-local sizeSliderRef
 
 local function GetPickerWidget()
   if not ColorPickerFrame then return nil end
@@ -84,12 +80,6 @@ local function RefreshOptionsUI()
 
   if hexEditBox then
     hexEditBox:SetText(GetNormalizedColorHex())
-  end
-
-  if sizeSliderRef then
-    local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 96, 192)
-    local snappedKey = NearestKey(DEFAULTS and { [96]=true,[128]=true,[192]=true } or {}, v) or 96
-    sizeSliderRef:SetValue(snappedKey)
   end
 
   RefreshColourUIEnabledState()
@@ -392,51 +382,11 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
     -- Appearance (basic)
     local appearanceHeader = MakeHeader("Appearance", cbHideMenusRef, -26)
 
-    local sizeLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    sizeLabel:SetPoint("TOPLEFT", appearanceHeader, "BOTTOMLEFT", 0, -12)
-    sizeLabel:SetText("Ring size")
-
-    sizeSliderRef = CreateFrame("Slider", "HelloCursorSizeSlider", content, "OptionsSliderTemplate")
-    sizeSliderRef:SetPoint("TOPLEFT", sizeLabel, "BOTTOMLEFT", 0, -8)
-    sizeSliderRef:SetWidth(260)
-    sizeSliderRef:SetMinMaxValues(64, 128)
-    sizeSliderRef:SetValueStep(16)
-    sizeSliderRef:SetObeyStepOnDrag(true)
-
-    do
-      local sliderName = sizeSliderRef:GetName()
-      if sliderName then
-        local low  = _G[sliderName .. "Low"]
-        local high = _G[sliderName .. "High"]
-        local text = _G[sliderName .. "Text"]
-        if low  then low:SetText("64") end
-        if high then high:SetText("128") end
-        if text then text:SetText("") end
-      end
-    end
-
-    local sliderLock = false
-    sizeSliderRef:SetScript("OnValueChanged", function(self, value)
-      if sliderLock then return end
-
-      value = tonumber(value) or DEFAULTS.size
-      local snappedKey = NearestKey({ [96]=true,[128]=true,[192]=true }, value) or 96
-
-      sliderLock = true
-      self:SetValue(snappedKey)
-      sliderLock = false
-
-      HelloCursorDB.size = snappedKey
-
-      RefreshSize()
-      UpdateRingPosition()
-    end)
-
     cbClassRef = MakeCheckbox(
       "Use class colour",
       function() return HelloCursorDB.useClassColor end,
       function(v) HelloCursorDB.useClassColor = v end,
-      sizeSliderRef, -16,
+      appearanceHeader, -32,
       function()
         ApplyTintIfNeeded(true)
         RefreshColourUIEnabledState()
@@ -615,11 +565,13 @@ local function CreateSettingsPanel()
       HelloCursorDB[key] = value
 
       if key == "size" then
-        local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 96, 192)
-        local snappedKey = NearestKey({ [96]=true,[128]=true,[192]=true }, v) or 96
+        local v = tonumber(HelloCursorDB.size) or DEFAULTS.size
+        if v ~= 96 and v ~= 128 and v ~= 192 then
+          v = DEFAULTS.size or 96
+        end
 
-        HelloCursorDB.size = snappedKey
-        HelloCursorDB[varName] = snappedKey
+        HelloCursorDB.size = v
+        HelloCursorDB[varName] = v
 
         RefreshSize()
         UpdateRingPosition()
@@ -695,34 +647,11 @@ local function CreateSettingsPanel()
     return setting
   end
 
-  local function AddSlider(key, name, tooltip, minValue, maxValue, step)
-    local current = HelloCursorDB[key]
-    if type(current) ~= "number" then current = DEFAULTS[key] or minValue end
-    if current < minValue then current = minValue end
-    if current > maxValue then current = maxValue end
-    HelloCursorDB[key] = current
-
-    local setting = RegisterSetting(key, name, DEFAULTS[key] or current)
-    OnChangedFor(key, setting)
-
-    if Settings.CreateSliderOptions and Settings.CreateSlider then
-      local opts = Settings.CreateSliderOptions(minValue, maxValue, step)
-      if MinimalSliderWithSteppersMixin and MinimalSliderWithSteppersMixin.Label and MinimalSliderWithSteppersMixin.Label.Right then
-        opts:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right)
-      end
-      Settings.CreateSlider(category, setting, opts, tooltip)
-    elseif Settings.CreateSlider then
-      Settings.CreateSlider(category, setting, minValue, maxValue, step, tooltip)
-    end
-
-    return setting
-  end
-
   -- Specialised dropdown for ring size (discrete options instead of a slider)
   local function AddSizeDropdown()
     local key = "size"
     local name = "Ring size"
-    local tooltip = "Adjust the size of the cursor ring."
+    local tooltip = "Choose the size of the cursor ring."
 
     local defaultValue = DEFAULTS[key] or 96
     local current = tonumber(HelloCursorDB[key]) or defaultValue
