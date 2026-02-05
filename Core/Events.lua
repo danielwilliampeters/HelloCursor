@@ -14,7 +14,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
     HelloCursorDB = HC.CopyDefaults(HelloCursorDB, HC.DEFAULTS)
     HelloCursorDB.colorHex = HC.NormalizeHex(HelloCursorDB.colorHex) or HC.DEFAULTS.colorHex
-    HelloCursorDB.size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 64, 128)
+    HelloCursorDB.size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 96, 192)
 
     if HC.SyncRingStyleFlags then
       HC.SyncRingStyleFlags()

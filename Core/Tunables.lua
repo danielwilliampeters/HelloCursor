@@ -16,12 +16,13 @@ HC.TUNE = {
   GCD_POP_DOWN_TIME = 0.075,
 
   -- Fixed canvas so ring thickness never scales (textures are authored for this)
-  RING_CANVAS_SIZE = 128,
+  RING_CANVAS_SIZE = 192,
 
   -- Neon overlay alphas
-  NEON_ALPHA_BASE  = 0.95,
-  NEON_ALPHA_CORE  = 0.80,
-  NEON_ALPHA_INNER = 0.85,
+  NEON_ALPHA_BASE  = 1.00,
+  NEON_ALPHA_CORE  = 1.00,
+  NEON_ALPHA_INNER = 0.50,
+  NEON_ALPHA_EDGE = 0.80,
 
   -- Neon GCD pulsing behaviour
   NEON_GCD_PULSE_ENABLED = true,   -- master switch for neon GCD pulsing
@@ -32,6 +33,8 @@ HC.TUNE = {
   NEON_PULSE_CORE_MAX  = 1.00,
   NEON_PULSE_INNER_MIN = 0.20,
   NEON_PULSE_INNER_MAX = 1.00,
+  NEON_PULSE_EDGE_MIN = 0.4,
+  NEON_PULSE_EDGE_MAX = 0.9,
 
   NEON_PULSE_USE_GCD_PROGRESS = false,  -- set true if you want ramp-up
 }

@@ -87,8 +87,8 @@ local function RefreshOptionsUI()
   end
 
   if sizeSliderRef then
-    local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
-    local snappedKey = NearestKey(DEFAULTS and { [64]=true,[80]=true,[96]=true,[112]=true,[128]=true } or {}, v) or 96
+    local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 96, 192)
+    local snappedKey = NearestKey(DEFAULTS and { [96]=true,[128]=true,[192]=true } or {}, v) or 96
     sizeSliderRef:SetValue(snappedKey)
   end
 
@@ -420,7 +420,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
       if sliderLock then return end
 
       value = tonumber(value) or DEFAULTS.size
-      local snappedKey = NearestKey({ [64]=true,[80]=true,[96]=true,[112]=true,[128]=true }, value) or 96
+      local snappedKey = NearestKey({ [96]=true,[128]=true,[192]=true }, value) or 96
 
       sliderLock = true
       self:SetValue(snappedKey)
@@ -615,8 +615,8 @@ local function CreateSettingsPanel()
       HelloCursorDB[key] = value
 
       if key == "size" then
-        local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 64, 128)
-        local snappedKey = NearestKey({ [64]=true,[80]=true,[96]=true,[112]=true,[128]=true }, v) or 96
+        local v = Clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 96, 192)
+        local snappedKey = NearestKey({ [96]=true,[128]=true,[192]=true }, v) or 96
 
         HelloCursorDB.size = snappedKey
         HelloCursorDB[varName] = snappedKey
@@ -718,6 +718,39 @@ local function CreateSettingsPanel()
     return setting
   end
 
+  -- Specialised dropdown for ring size (discrete options instead of a slider)
+  local function AddSizeDropdown()
+    local key = "size"
+    local name = "Ring size"
+    local tooltip = "Adjust the size of the cursor ring."
+
+    local defaultValue = DEFAULTS[key] or 96
+    local current = tonumber(HelloCursorDB[key]) or defaultValue
+
+    -- Only allow the authored texture keys; fall back to default if needed
+    if current ~= 96 and current ~= 128 and current ~= 192 then
+      current = defaultValue
+    end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add(96, "Small (96)")
+        container:Add(128, "Medium (128)")
+        container:Add(192, "Large (192)")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
   local function AddHeader(text)
     if layout and type(layout.AddInitializer) == "function"
       and type(CreateSettingsListSectionHeaderInitializer) == "function" then
@@ -777,12 +810,7 @@ local function CreateSettingsPanel()
     "Use a flat ring style without neon effects."
   )
 
-  AddSlider(
-    "size",
-    "Ring size",
-    "Adjust the size of the cursor ring.",
-    64, 128, 16
-  )
+  AddSizeDropdown()
 
   AddCheckbox(
     "useClassColor",
