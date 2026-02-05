@@ -14,7 +14,19 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
     HelloCursorDB = HC.CopyDefaults(HelloCursorDB, HC.DEFAULTS)
     HelloCursorDB.colorHex = HC.NormalizeHex(HelloCursorDB.colorHex) or HC.DEFAULTS.colorHex
-    HelloCursorDB.size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 96, 192)
+
+    -- Normalise ring size: clamp into the authored range, then
+    -- fall back to 96 if the value doesn't match a known size.
+    local size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 96, 192)
+    if size ~= 96 and size ~= 128 and size ~= 192 then
+      size = 96
+    end
+
+    -- Keep both the core DB field and the Settings-backed
+    -- "HelloCursor_size" variable in sync, so the dropdown
+    -- never shows a "Custom" value after upgrading.
+    HelloCursorDB.size = size
+    HelloCursorDB["HelloCursor_size"] = size
 
     if HC.SyncRingStyleFlags then
       HC.SyncRingStyleFlags()

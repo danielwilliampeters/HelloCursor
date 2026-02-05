@@ -650,12 +650,12 @@ SetMix = function(mix)
       -- Wide, obvious swing while pulsing.
       -- We blend between steady neon and pulsing neon using pulseStrength.
       local corePulse  = HC.Util.Lerp(HC.TUNE.NEON_PULSE_CORE_MIN,  HC.TUNE.NEON_PULSE_CORE_MAX,  osc)
-      local innerPulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_INNER_MIN, HC.TUNE.NEON_PULSE_INNER_MAX, osc)
-      local edgePulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_EDGE_MIN, HC.TUNE.NEON_PULSE_EDGE_MAX, osc)
+      -- local innerPulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_INNER_MIN, HC.TUNE.NEON_PULSE_INNER_MAX, osc)
+      -- local edgePulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_EDGE_MIN, HC.TUNE.NEON_PULSE_EDGE_MAX, osc)
 
       coreBase  = HC.Util.Lerp(coreBase,  corePulse,  pulseStrength)
-      innerBase = HC.Util.Lerp(innerBase, innerPulse, pulseStrength)
-      edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
+      -- innerBase = HC.Util.Lerp(innerBase, innerPulse, pulseStrength)
+      -- edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
     end
 
     if mix <= 0.0001 then
@@ -813,6 +813,9 @@ local function RefreshSize()
 
   HC.Util.SafeSetTexture(neonInnerNormal, HC.TEX.NEON_INNER[key],      HC.TEX.NEON_INNER[96])
   HC.Util.SafeSetTexture(neonInnerSmall,  HC.TEX.NEON_INNER_SMALL[key], HC.TEX.NEON_INNER_SMALL[96] or HC.TEX.NEON_INNER[96])
+
+  HC.Util.SafeSetTexture(neonEdgeNormal, HC.TEX.NEON_EDGE[key], HC.TEX.NEON_EDGE[96])
+  HC.Util.SafeSetTexture(neonEdgeSmall,  HC.TEX.NEON_EDGE_SMALL[key], HC.TEX.NEON_EDGE_SMALL[96] or HC.TEX.NEON_EDGE[96])
 
   lastTexKey = key
 
