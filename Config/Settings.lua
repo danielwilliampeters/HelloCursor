@@ -647,7 +647,6 @@ local function CreateSettingsPanel()
     return setting
   end
 
-  -- Specialised dropdown for ring size (discrete options instead of a slider)
   local function AddSizeDropdown()
     local key = "size"
     local name = "Ring size"
@@ -672,6 +671,30 @@ local function CreateSettingsPanel()
         container:Add(96, "Medium (96)")
         container:Add(128, "Large (128)")
         container:Add(192, "XL (192)")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
+  local function AddStyleDropdown()
+    local key = "classicRingStyle"
+    local name = "Ring style"
+    local tooltip = "Choose between neon and classic ring styles."
+
+    local defaultValue = DEFAULTS[key] and true or false
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add(false, "Neon (default)")
+        container:Add(true, "Classic")
         return container:GetData()
       end
 
@@ -756,11 +779,7 @@ local function CreateSettingsPanel()
 
   AddSizeDropdown()
 
-  AddCheckbox(
-    "classicRingStyle",
-    "Classic ring style",
-    "Use a flat ring style without neon effects."
-  )
+  AddStyleDropdown()
 
   AddCheckbox(
     "useClassColor",
