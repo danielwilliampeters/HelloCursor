@@ -794,3 +794,20 @@ local function CreateSettingsPanel()
 end
 
 HC.CreateSettingsPanel = CreateSettingsPanel
+
+-- Global handler for the AddOn Compartment button
+function HelloCursor_OpenSettings(addonName, buttonName)
+  if not (HelloCursor and Settings and Settings.OpenToCategory) then return end
+  local HC = HelloCursor
+
+  -- Ensure settings category exists
+  if not HC.settingsCategory and HC.CreateSettingsPanel then
+    HC.settingsCategory = HC.CreateSettingsPanel()
+  end
+
+  local cat = HC.settingsCategory
+  if not cat then return end
+
+  -- Open it
+  Settings.OpenToCategory(cat.GetID and cat:GetID() or cat)
+end
