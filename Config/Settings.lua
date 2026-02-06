@@ -693,7 +693,7 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
-        container:Add(false, "Neon (default)")
+        container:Add(false, "Neon")
         container:Add(true, "Classic")
         return container:GetData()
       end
