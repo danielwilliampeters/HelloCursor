@@ -668,9 +668,9 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
-        container:Add(96, "Small (96)")
-        container:Add(128, "Medium (128)")
-        container:Add(192, "Large (192)")
+        container:Add(96, "Medium (96)")
+        container:Add(128, "Large (128)")
+        container:Add(192, "XL (192)")
         return container:GetData()
       end
 
@@ -731,29 +731,7 @@ local function CreateSettingsPanel()
     "Always show the cursor ring while you are in combat, regardless of location."
   )
 
-  AddHeader("Appearance")
-
-  AddCheckbox(
-    "classicRingStyle",
-    "Classic ring style",
-    "Use a flat ring style without neon effects."
-  )
-
-  AddSizeDropdown()
-
-  AddCheckbox(
-    "useClassColor",
-    "Use class colour",
-    "Tint the ring using your class colour.\n\nCustom colour is configured in Advanced settings."
-  )
-
   AddHeader("Behaviour")
-
-  AddCheckbox(
-    "showGCDSpinner",
-    "Global cooldown animation",
-    "Show an animation on the ring that tracks the global cooldown."
-  )
 
   AddCheckbox(
     "reactiveCursor",
@@ -765,6 +743,28 @@ local function CreateSettingsPanel()
     "showWhileMouselooking",
     "Show while mouselooking (RMB)",
     "Shows the ring while holding the right mouse button, even in zones where it would normally be hidden."
+  )
+
+  AddCheckbox(
+    "showGCDSpinner",
+    "Global cooldown animation",
+    "Show an animation on the ring that tracks the global cooldown."
+  )
+
+  AddHeader("Appearance")
+
+  AddSizeDropdown()
+
+  AddCheckbox(
+    "classicRingStyle",
+    "Classic ring style",
+    "Use a flat ring style without neon effects."
+  )
+
+  AddCheckbox(
+    "useClassColor",
+    "Use class colour",
+    "Tint the ring using your class colour.\n\nCustom colour is configured in Advanced settings."
   )
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)

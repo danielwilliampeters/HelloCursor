@@ -25,9 +25,9 @@ local DEFAULTS = {
   showPvP = true,
   showInCombat = true,
   hideInMenus = true,
-  showWhileMouselooking = false,
-  reactiveCursor = false,
-  showGCDSpinner = false,
+  showWhileMouselooking = true,
+  reactiveCursor = true,
+  showGCDSpinner = true,
   classicRingStyle = false,
 }
 
