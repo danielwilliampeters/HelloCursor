@@ -90,8 +90,8 @@ local function GetNormalizedSize()
     if n > hi then return hi end
     return n
   end
-  -- Clamp to the authored ring sizes range (96–192)
-  return clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 96, 192)
+  -- Clamp to the supported ring sizes range (80–192)
+  return clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 80, 192)
 end
 
 -- ---------------------------------------------------------------------

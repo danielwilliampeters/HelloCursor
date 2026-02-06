@@ -566,7 +566,7 @@ local function CreateSettingsPanel()
 
       if key == "size" then
         local v = tonumber(HelloCursorDB.size) or DEFAULTS.size
-        if v ~= 96 and v ~= 128 and v ~= 192 then
+        if v ~= 80 and v ~= 96 and v ~= 128 and v ~= 192 then
           v = DEFAULTS.size or 96
         end
 
@@ -657,7 +657,7 @@ local function CreateSettingsPanel()
     local current = tonumber(HelloCursorDB[key]) or defaultValue
 
     -- Only allow the authored texture keys; fall back to default if needed
-    if current ~= 96 and current ~= 128 and current ~= 192 then
+    if current ~= 80 and current ~= 96 and current ~= 128 and current ~= 192 then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -668,6 +668,7 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
+        container:Add(80, "Small (80)")
         container:Add(96, "Medium (96)")
         container:Add(128, "Large (128)")
         container:Add(192, "XL (192)")

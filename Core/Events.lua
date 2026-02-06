@@ -15,10 +15,10 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB = HC.CopyDefaults(HelloCursorDB, HC.DEFAULTS)
     HelloCursorDB.colorHex = HC.NormalizeHex(HelloCursorDB.colorHex) or HC.DEFAULTS.colorHex
 
-    -- Normalise ring size: clamp into the authored range, then
+    -- Normalise ring size: clamp into the supported range, then
     -- fall back to 96 if the value doesn't match a known size.
-    local size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 96, 192)
-    if size ~= 96 and size ~= 128 and size ~= 192 then
+    local size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 80, 192)
+    if size ~= 80 and size ~= 96 and size ~= 128 and size ~= 192 then
       size = 96
     end
 
