@@ -25,8 +25,12 @@ local DEFAULTS = {
   showPvP = true,
   showInCombat = true,
   hideInMenus = true,
-  showWhileMouselooking = true,
-  reactiveCursor = true,
+  -- Mouselook behaviour while holding RMB
+  -- "none"        = no special behaviour
+  -- "show"        = force ring visible while mouselooking
+  -- "shrink"      = shrink ring while mouselooking
+  -- "show_shrink" = force visible + shrink while mouselooking
+  mouselookMode = "show_shrink",
   showGCDSpinner = true,
   classicRingStyle = false,
 }
@@ -49,6 +53,92 @@ local function SyncRingStyleFlags()
   HelloCursorDB["HelloCursor_classicRingStyle"] = HelloCursorDB.classicRingStyle
   HelloCursorDB["HelloCursor_useNeonRing"] = HelloCursorDB.useNeonRing
 end
+
+-- ---------------------------------------------------------------------
+-- Mouselook behaviour (RMB) helpers
+-- ---------------------------------------------------------------------
+
+local VALID_MOUSELOOK_MODES = {
+  none        = true,
+  show        = true,
+  shrink      = true,
+  show_shrink = true,
+}
+
+local function NormalizeMouselookMode(mode)
+  if type(mode) ~= "string" then
+    return DEFAULTS.mouselookMode or "none"
+  end
+  mode = mode:lower()
+  if VALID_MOUSELOOK_MODES[mode] then
+    return mode
+  end
+  return DEFAULTS.mouselookMode or "none"
+end
+
+local function SyncMouselookModeFromLegacy()
+  local mode = HelloCursorDB.mouselookMode
+
+  if not VALID_MOUSELOOK_MODES[mode] then
+    local reactive = HelloCursorDB.reactiveCursor
+    local reactiveNS = HelloCursorDB["HelloCursor_reactiveCursor"]
+    if reactive == nil and type(reactiveNS) == "boolean" then
+      reactive = reactiveNS
+    end
+
+    local showML = HelloCursorDB.showWhileMouselooking
+    local showMLNS = HelloCursorDB["HelloCursor_showWhileMouselooking"]
+    if showML == nil and type(showMLNS) == "boolean" then
+      showML = showMLNS
+    end
+
+    if reactive == nil and showML == nil then
+      mode = DEFAULTS.mouselookMode or "none"
+    else
+      reactive = reactive and true or false
+      showML = showML and true or false
+
+      if reactive and showML then
+        mode = "show_shrink"
+      elseif reactive then
+        mode = "shrink"
+      elseif showML then
+        mode = "show"
+      else
+        mode = "none"
+      end
+    end
+  end
+
+  mode = NormalizeMouselookMode(mode)
+
+  HelloCursorDB.mouselookMode = mode
+  HelloCursorDB["HelloCursor_mouselookMode"] = mode
+
+  -- Keep legacy booleans in sync for any external readers, but the
+  -- addon logic itself derives behaviour from mouselookMode.
+  local reactive = (mode == "shrink" or mode == "show_shrink")
+  local showML = (mode == "show" or mode == "show_shrink")
+
+  HelloCursorDB.reactiveCursor = reactive
+  HelloCursorDB.showWhileMouselooking = showML
+
+  HelloCursorDB["HelloCursor_reactiveCursor"] = reactive
+  HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
+end
+
+local function IsMouselookShowEnabled()
+  return HelloCursorDB.mouselookMode == "show"
+      or HelloCursorDB.mouselookMode == "show_shrink"
+end
+
+local function IsMouselookShrinkEnabled()
+  return HelloCursorDB.mouselookMode == "shrink"
+      or HelloCursorDB.mouselookMode == "show_shrink"
+end
+
+-- Seed / migrate mouselook mode once on load.
+SyncMouselookModeFromLegacy()
 
 -- ---------------------------------------------------------------------
 -- Small utils
@@ -187,7 +277,7 @@ local function ShouldShowRing()
   -- Optional override: always show the ring while mouselooking,
   -- even if the current zone would normally hide it. This still
   -- respects the "hide in menus" rule above.
-  if HelloCursorDB.showWhileMouselooking and IsIntentionalMouselookActive() then
+  if IsMouselookShowEnabled() and IsIntentionalMouselookActive() then
     return true
   end
 
@@ -689,7 +779,7 @@ WantsSmallRing = function()
     return false
   end
 
-  if not HelloCursorDB.reactiveCursor then return false end
+  if not IsMouselookShrinkEnabled() then return false end
   return IsIntentionalMouselookActive()
 end
 
@@ -849,8 +939,8 @@ local function UpdateVisibility()
 
       -- If the ring is appearing due to "show while mouselooking",
       -- force it to start at the LARGE ring on the first frame.
-      if HelloCursorDB.showWhileMouselooking
-        and HelloCursorDB.reactiveCursor
+      if IsMouselookShowEnabled()
+        and IsMouselookShrinkEnabled()
         and IsIntentionalMouselookActive()
       then
         -- hard reset the mix so it *starts* big then the OnUpdate tween shrinks it
@@ -918,7 +1008,7 @@ visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
   -- mouselook state changed (for the override), or if we don't have a baseline yet.
   if lastMenuOpen == nil
     or menuOpen ~= lastMenuOpen
-    or (HelloCursorDB.showWhileMouselooking and mouselookActive ~= lastMouselookActive)
+    or (IsMouselookShowEnabled() and mouselookActive ~= lastMouselookActive)
   then
     lastMenuOpen = menuOpen
     lastMouselookActive = mouselookActive

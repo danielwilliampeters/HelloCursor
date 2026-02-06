@@ -32,6 +32,34 @@ local function GetNormalizedColorHex()
   return NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
 end
 
+local function DeriveMouselookModeFromFlags(reactive, showML)
+  reactive = reactive and true or false
+  showML = showML and true or false
+
+  if reactive and showML then
+    return "show_shrink"
+  elseif reactive then
+    return "shrink"
+  elseif showML then
+    return "show"
+  end
+
+  return DEFAULTS.mouselookMode or "none"
+end
+
+local function ApplyMouselookModeToFlags(mode)
+  mode = tostring(mode or DEFAULTS.mouselookMode)
+
+  local reactive = (mode == "shrink" or mode == "show_shrink")
+  local showML = (mode == "show" or mode == "show_shrink")
+
+  HelloCursorDB.reactiveCursor = reactive
+  HelloCursorDB.showWhileMouselooking = showML
+
+  HelloCursorDB["HelloCursor_reactiveCursor"] = reactive
+  HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
+end
+
 -- ---------------------------------------------------------------------
 -- Settings UI (Blizzard Settings panel)
 -- ---------------------------------------------------------------------
@@ -172,6 +200,9 @@ local function ResetToDefaults()
   HelloCursorDB.colorHex = DEFAULTS.colorHex
   HelloCursorDB.size = DEFAULTS.size
 
+  -- Keep legacy mouselook booleans in sync with the new mode
+  ApplyMouselookModeToFlags(HelloCursorDB.mouselookMode)
+
   -- Ensure style flags are consistent (classic vs neon + legacy useNeonRing)
   SyncRingStyleFlags()
 
@@ -184,8 +215,7 @@ local function ResetToDefaults()
     "showPvE",
     "showPvP",
     "showInCombat",
-    "showWhileMouselooking",
-    "reactiveCursor",
+    "mouselookMode",
     "showGCDSpinner",
     "hideInMenus",
     "size",
@@ -339,7 +369,12 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
     cbReactiveRef = MakeCheckbox(
       "Reactive cursor (shrink while holding RMB)",
       function() return HelloCursorDB.reactiveCursor end,
-      function(v) HelloCursorDB.reactiveCursor = v end,
+      function(v)
+        HelloCursorDB.reactiveCursor = v and true or false
+        local mode = DeriveMouselookModeFromFlags(HelloCursorDB.reactiveCursor, HelloCursorDB.showWhileMouselooking)
+        HelloCursorDB.mouselookMode = mode
+        ApplyMouselookModeToFlags(mode)
+      end,
       behHeader, -10,
       function()
         StopTween()
@@ -350,7 +385,12 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
     cbMouselookShowRef = MakeCheckbox(
       "Always show while mouselooking",
       function() return HelloCursorDB.showWhileMouselooking end,
-      function(v) HelloCursorDB.showWhileMouselooking = v end,
+      function(v)
+        HelloCursorDB.showWhileMouselooking = v and true or false
+        local mode = DeriveMouselookModeFromFlags(HelloCursorDB.reactiveCursor, HelloCursorDB.showWhileMouselooking)
+        HelloCursorDB.mouselookMode = mode
+        ApplyMouselookModeToFlags(mode)
+      end,
       cbReactiveRef, -10,
       function()
         UpdateVisibility()
@@ -580,9 +620,11 @@ local function CreateSettingsPanel()
         ApplyTintIfNeeded(true)
         RefreshColourUIEnabledState()
 
-      elseif key == "reactiveCursor" then
+      elseif key == "mouselookMode" then
+        ApplyMouselookModeToFlags(HelloCursorDB.mouselookMode)
         StopTween()
         HC.SnapToTargetMix()
+        ForceVisibilityRecompute()
 
       elseif key == "showGCDSpinner" then
         ApplyTintIfNeeded(true)
@@ -603,7 +645,6 @@ local function CreateSettingsPanel()
         or key == "showPvE"
         or key == "showPvP"
         or key == "showInCombat"
-        or key == "showWhileMouselooking"
         or key == "hideInMenus"
         or key == "enabled" then
         ForceVisibilityRecompute()
@@ -704,6 +745,37 @@ local function CreateSettingsPanel()
     return setting
   end
 
+  local function AddMouselookModeDropdown()
+    local key = "mouselookMode"
+    local name = "Mouselook behaviour (RMB)"
+    local tooltip = "Controls how the cursor ring behaves while holding the right mouse button to turn the camera."
+
+    local defaultValue = DEFAULTS[key] or "none"
+    local current = HelloCursorDB[key]
+    if type(current) ~= "string" then
+      current = defaultValue
+    end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("none",        "None")
+        container:Add("show",        "Show while mouselooking")
+        container:Add("shrink",      "Shrink while mouselooking")
+        container:Add("show_shrink", "Show and shrink while mouselooking")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
   local function AddHeader(text)
     if layout and type(layout.AddInitializer) == "function"
       and type(CreateSettingsListSectionHeaderInitializer) == "function" then
@@ -757,17 +829,7 @@ local function CreateSettingsPanel()
 
   AddHeader("Behaviour")
 
-  AddCheckbox(
-    "reactiveCursor",
-    "Shrink while mouselooking (RMB)",
-    "Reduces the ring size while holding the right mouse button to turn the camera."
-  )
-
-  AddCheckbox(
-    "showWhileMouselooking",
-    "Show while mouselooking (RMB)",
-    "Shows the ring while holding the right mouse button, even in zones where it would normally be hidden."
-  )
+  AddMouselookModeDropdown()
 
   AddCheckbox(
     "showGCDSpinner",
