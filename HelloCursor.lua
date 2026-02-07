@@ -174,6 +174,7 @@ local function GetNormalizedColorHex()
 end
 
 local VALID_SIZES = {
+  [64]  = true,
   [80]  = true,
   [96]  = true,
   [128] = true,

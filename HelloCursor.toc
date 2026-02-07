@@ -2,7 +2,7 @@
 ## Title: Hello Cursor
 ## Notes: Adds a configurable ring around the cursor. /hc
 ## Author: Daniel Peters
-## Version: 2.1.5
+## Version: 2.1.6
 ## SavedVariables: HelloCursorDB
 ## Category: User Interface
 ## IconTexture: Interface\AddOns\HelloCursor\Assets\Icons\icon.tga
