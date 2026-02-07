@@ -708,9 +708,9 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
-        container:Add(64,  "Micro")
-        container:Add(80,  "Compact")
-        container:Add(96,  "Standard")
+        container:Add(64,  "Compact")
+        container:Add(80,  "Standard")
+        container:Add(96,  "Medium")
         container:Add(128, "Large")
         return container:GetData()
       end
