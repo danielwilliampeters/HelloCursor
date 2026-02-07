@@ -18,7 +18,7 @@ local DEFAULTS = {
   enabled = true,
   colorHex = "FF4FD8",
   useClassColor = false,
-  size = 96,
+  size = 80,
   showWorld = true,
   showHousing = false,
   showPvE = true,
@@ -173,15 +173,34 @@ local function GetNormalizedColorHex()
   return (HC.Util and HC.Util.NormalizeHex and HC.Util.NormalizeHex(HelloCursorDB.colorHex)) or DEFAULTS.colorHex
 end
 
+local VALID_SIZES = {
+  [80]  = true,
+  [96]  = true,
+  [128] = true,
+}
+
+local function NearestSupportedSize(n)
+  n = tonumber(n)
+  if not n then return DEFAULTS.size end
+
+  if VALID_SIZES[n] then return n end
+
+  -- Explicit migration: old "Huge" 192 -> 128
+  if n == 192 then return 128 end
+
+  -- Fallback: snap to nearest supported
+  if n < 88  then return 80 end
+  if n < 112 then return 96 end
+  return 128
+end
+
 local function GetNormalizedSize()
-  local clamp = HC.Util and HC.Util.Clamp or function(n, lo, hi)
-    n = tonumber(n) or lo
-    if n < lo then return lo end
-    if n > hi then return hi end
-    return n
-  end
-  -- Clamp to the supported ring sizes range (80–192)
-  return clamp(tonumber(HelloCursorDB.size) or DEFAULTS.size, 80, 192)
+  local size = NearestSupportedSize(HelloCursorDB.size)
+
+  HelloCursorDB.size = size
+  HelloCursorDB["HelloCursor_size"] = size
+
+  return size
 end
 
 -- ---------------------------------------------------------------------

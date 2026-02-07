@@ -15,18 +15,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     HelloCursorDB = HC.CopyDefaults(HelloCursorDB, HC.DEFAULTS)
     HelloCursorDB.colorHex = HC.NormalizeHex(HelloCursorDB.colorHex) or HC.DEFAULTS.colorHex
 
-    -- Normalise ring size: clamp into the supported range, then
-    -- fall back to 96 if the value doesn't match a known size.
-    local size = HC.Clamp(tonumber(HelloCursorDB.size) or HC.DEFAULTS.size, 80, 192)
-    if size ~= 80 and size ~= 96 and size ~= 128 and size ~= 192 then
-      size = 96
+    -- Legacy migration only (authoritative normalization lives in core)
+    local size = tonumber(HelloCursorDB.size)
+    if size == 192 then
+      HelloCursorDB.size = 128
+      HelloCursorDB["HelloCursor_size"] = 128
     end
-
-    -- Keep both the core DB field and the Settings-backed
-    -- "HelloCursor_size" variable in sync, so the dropdown
-    -- never shows a "Custom" value after upgrading.
-    HelloCursorDB.size = size
-    HelloCursorDB["HelloCursor_size"] = size
 
     if HC.SyncRingStyleFlags then
       HC.SyncRingStyleFlags()

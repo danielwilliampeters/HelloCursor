@@ -606,8 +606,8 @@ local function CreateSettingsPanel()
 
       if key == "size" then
         local v = tonumber(HelloCursorDB.size) or DEFAULTS.size
-        if v ~= 80 and v ~= 96 and v ~= 128 and v ~= 192 then
-          v = DEFAULTS.size or 96
+        if v ~= 80 and v ~= 96 and v ~= 128 then
+          v = DEFAULTS.size or 80
         end
 
         HelloCursorDB.size = v
@@ -697,7 +697,7 @@ local function CreateSettingsPanel()
     local current = tonumber(HelloCursorDB[key]) or defaultValue
 
     -- Only allow the authored texture keys; fall back to default if needed
-    if current ~= 80 and current ~= 96 and current ~= 128 and current ~= 192 then
+    if current ~= 80 and current ~= 96 and current ~= 128 then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -711,7 +711,6 @@ local function CreateSettingsPanel()
         container:Add(80,  "Compact")
         container:Add(96,  "Standard")
         container:Add(128, "Large")
-        container:Add(192, "Huge")
         return container:GetData()
       end
 
@@ -789,12 +788,10 @@ local function CreateSettingsPanel()
     "Turns Hello Cursor on or off."
   )
 
-  AddHeader("Visibility")
-
   AddCheckbox(
     "hideInMenus",
-    "Hide while game menus are open",
-    "Hide the cursor ring while the main game menus are open."
+    "Hide in menus",
+    "Hide the cursor ring while menus (Esc, Settings, Options) are open."
   )
 
   AddCheckbox(
