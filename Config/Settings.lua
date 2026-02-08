@@ -66,10 +66,6 @@ end
 
 local hexEditBox
 local pickBtnRef
-local cbClassRef
-
-local cbWorldRef, cbHousingRef, cbPvERef, cbPvPRef, cbCombatRef, cbReactiveRef, cbMouselookShowRef
-local cbGCDRef, cbHideMenusRef, cbClassicStyleRef
 
 local function GetPickerWidget()
   if not ColorPickerFrame then return nil end
@@ -94,18 +90,6 @@ local function RefreshColourUIEnabledState()
 end
 
 local function RefreshOptionsUI()
-  if cbWorldRef then cbWorldRef:SetChecked(HelloCursorDB.showWorld and true or false) end
-  if cbHousingRef then cbHousingRef:SetChecked(HelloCursorDB.showHousing and true or false) end
-  if cbPvERef then cbPvERef:SetChecked(HelloCursorDB.showPvE and true or false) end
-  if cbPvPRef then cbPvPRef:SetChecked(HelloCursorDB.showPvP and true or false) end
-  if cbCombatRef then cbCombatRef:SetChecked(HelloCursorDB.showInCombat and true or false) end
-  if cbReactiveRef then cbReactiveRef:SetChecked(HelloCursorDB.reactiveCursor and true or false) end
-  if cbMouselookShowRef then cbMouselookShowRef:SetChecked(HelloCursorDB.showWhileMouselooking and true or false) end
-  if cbGCDRef then cbGCDRef:SetChecked(HelloCursorDB.showGCDSpinner and true or false) end
-  if cbHideMenusRef then cbHideMenusRef:SetChecked(HelloCursorDB.hideInMenus and true or false) end
-  if cbClassRef then cbClassRef:SetChecked(HelloCursorDB.useClassColor and true or false) end
-  if cbClassicStyleRef then cbClassicStyleRef:SetChecked(HelloCursorDB.classicRingStyle and true or false) end
-
   if hexEditBox then
     hexEditBox:SetText(GetNormalizedColorHex())
   end
@@ -193,8 +177,6 @@ local function ResetToDefaults()
     HelloCursorDB[k] = v
   end
 
-  HelloCursorDB.neonPulseEnabled = nil
-  HelloCursorDB["HelloCursor_neonPulseEnabled"] = nil
   HelloCursorDB.useNeonRing = nil
   
   HelloCursorDB.colorHex = DEFAULTS.colorHex
@@ -236,10 +218,6 @@ local function ResetToDefaults()
   RefreshOptionsUI()
 end
 
--- Legacy canvas-style panel. On modern clients this is registered as an
--- "advanced" sub-category underneath the vertical layout category so we
--- can keep the richer colour + utilities UI. When used as a top-level
--- category (older clients), it also shows the full set of toggles.
 local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   if not Settings or not Settings.RegisterCanvasLayoutCategory then return nil end
 
@@ -322,129 +300,9 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local previousAnchor = title
 
-  if not isAdvanced then
-    -- Visibility
-    local visHeader = MakeHeader("Visibility", title, -18)
-
-    cbWorldRef = MakeCheckbox(
-      "Show in world",
-      function() return HelloCursorDB.showWorld end,
-      function(v) HelloCursorDB.showWorld = v end,
-      visHeader, -10
-    )
-
-    cbHousingRef = MakeCheckbox(
-      "Show in housing",
-      function() return HelloCursorDB.showHousing end,
-      function(v) HelloCursorDB.showHousing = v end,
-      cbWorldRef, -10
-    )
-
-    cbPvERef = MakeCheckbox(
-      "Show in dungeons / delves / raids",
-      function() return HelloCursorDB.showPvE end,
-      function(v) HelloCursorDB.showPvE = v end,
-      cbHousingRef, -10
-    )
-
-    cbPvPRef = MakeCheckbox(
-      "Show in battlegrounds / arena",
-      function() return HelloCursorDB.showPvP end,
-      function(v) HelloCursorDB.showPvP = v end,
-      cbPvERef, -10
-    )
-
-    cbCombatRef = MakeCheckbox(
-      "Show in combat",
-      function() return HelloCursorDB.showInCombat end,
-      function(v) HelloCursorDB.showInCombat = v end,
-      cbPvPRef, -10
-    )
-
-    MakeSeparator(cbCombatRef, -14)
-
-    -- Behaviour
-    local behHeader = MakeHeader("Behaviour", cbCombatRef, -26)
-
-    cbReactiveRef = MakeCheckbox(
-      "Reactive cursor (shrink while holding RMB)",
-      function() return HelloCursorDB.reactiveCursor end,
-      function(v)
-        HelloCursorDB.reactiveCursor = v and true or false
-        local mode = DeriveMouselookModeFromFlags(HelloCursorDB.reactiveCursor, HelloCursorDB.showWhileMouselooking)
-        HelloCursorDB.mouselookMode = mode
-        ApplyMouselookModeToFlags(mode)
-      end,
-      behHeader, -10,
-      function()
-        StopTween()
-        HC.SnapToTargetMix()
-      end
-    )
-
-    cbMouselookShowRef = MakeCheckbox(
-      "Always show while mouselooking",
-      function() return HelloCursorDB.showWhileMouselooking end,
-      function(v)
-        HelloCursorDB.showWhileMouselooking = v and true or false
-        local mode = DeriveMouselookModeFromFlags(HelloCursorDB.reactiveCursor, HelloCursorDB.showWhileMouselooking)
-        HelloCursorDB.mouselookMode = mode
-        ApplyMouselookModeToFlags(mode)
-      end,
-      cbReactiveRef, -10,
-      function()
-        UpdateVisibility()
-      end
-    )
-
-    cbGCDRef = MakeCheckbox(
-      "Global cooldown (GCD) animation",
-      function() return HelloCursorDB.showGCDSpinner end,
-      function(v) HelloCursorDB.showGCDSpinner = v end,
-      cbMouselookShowRef, -10,
-      function()
-        ApplyTintIfNeeded(true)
-      end
-    )
-
-    cbHideMenusRef = MakeCheckbox(
-      "Hide ring while game menus are open",
-      function() return HelloCursorDB.hideInMenus end,
-      function(v) HelloCursorDB.hideInMenus = v end,
-      cbGCDRef, -10,
-      function()
-        UpdateVisibility()
-      end
-    )
-
-    MakeSeparator(cbHideMenusRef, -14)
-
-    -- Appearance (basic)
-    local appearanceHeader = MakeHeader("Appearance", cbHideMenusRef, -26)
-
-    cbClassRef = MakeCheckbox(
-      "Use class colour",
-      function() return HelloCursorDB.useClassColor end,
-      function(v) HelloCursorDB.useClassColor = v end,
-      appearanceHeader, -32,
-      function()
-        ApplyTintIfNeeded(true)
-        RefreshColourUIEnabledState()
-      end
-    )
-    
-    cbClassicStyleRef = MakeCheckbox(
-      "Classic ring style",
-      function() return HelloCursorDB.classicRingStyle end,
-      function(v)
-        HelloCursorDB.classicRingStyle = v and true or false
-        HC.ApplyRingStyleChange()
-      end,
-      cbClassRef, -10
-    )
-
-    previousAnchor = cbClassicStyleRef
-  end
+  -- For legacy/canvas layout, we only use this panel for the
+  -- colour picker and related utilities. All other options live
+  -- in the modern vertical layout Settings panel.
 
   local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   colorLabel:SetPoint("TOPLEFT", previousAnchor, "BOTTOMLEFT", 0, -22)
@@ -606,7 +464,7 @@ local function CreateSettingsPanel()
 
       if key == "size" then
         local v = tonumber(HelloCursorDB.size) or DEFAULTS.size
-        if v ~= 64 and v ~= 96 and v ~= 128 then
+        if v ~= 64 and v ~= 80 and v ~= 96 and v ~= 128 then
           v = DEFAULTS.size or 80
         end
 
@@ -629,11 +487,9 @@ local function CreateSettingsPanel()
       elseif key == "showGCDSpinner" then
         ApplyTintIfNeeded(true)
         if not HelloCursorDB.showGCDSpinner then
-          HC.neonPulseStrength = 0
-
-          HC.HideGCDSpinners()
-          HC.gcdVisualActive = false
-          HC.suppressFlatRing = false
+          if HC.HideGCDSpinners then
+            HC.HideGCDSpinners()
+          end
           if SetMix then SetMix(HC.currentMix or 0) end
         end
 
@@ -690,14 +546,14 @@ local function CreateSettingsPanel()
 
   local function AddSizeDropdown()
     local key = "size"
-    local name = "Ring size"
-    local tooltip = "Choose the size of the cursor ring."
+    local name = "Cursor ring size"
+    local tooltip = "Adjust the size of the cursor ring."
 
     local defaultValue = DEFAULTS[key] or 96
     local current = tonumber(HelloCursorDB[key]) or defaultValue
 
     -- Only allow the authored texture keys; fall back to default if needed
-    if current ~= 64 and current ~= 96 and current ~= 128 then
+    if current ~= 64 and current ~= 80 and current ~= 96 and current ~= 128 then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -723,8 +579,8 @@ local function CreateSettingsPanel()
 
   local function AddStyleDropdown()
     local key = "classicRingStyle"
-    local name = "Ring style"
-    local tooltip = "Choose between neon and classic ring styles."
+    local name = "Cursor ring appearance"
+    local tooltip = "Choose the visual style of the cursor ring."
 
     local defaultValue = DEFAULTS[key] and true or false
 
@@ -797,8 +653,8 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "showWorld",
-    "Show in world",
-    "Show the cursor ring in open world zones."
+    "Show outside instances",
+    "Show the cursor ring outside dungeons, raids, battlegrounds, and arenas."
   )
 
   AddCheckbox(
@@ -809,20 +665,20 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "showPvE",
-    "Show in dungeons, delves, and raids",
-    "Show the cursor ring in dungeons, delves, and raids."
+    "Show in PvE instances",
+    "Show the cursor ring in PvE instances (dungeons, delves, and raids)."
   )
 
   AddCheckbox(
     "showPvP",
-    "Show in battlegrounds and arenas",
-    "Show the cursor ring in battlegrounds and arenas."
+    "Show in PvP instances",
+    "Show the cursor ring in PvP instances (battlegrounds and arenas)."
   )
 
   AddCheckbox(
     "showInCombat",
-    "Always show in combat",
-    "Always show the cursor ring while you are in combat, regardless of location."
+    "Always show during combat",
+    "Always show the cursor ring while you are in combat, regardless of location or other visibility settings."
   )
 
   AddHeader("Behaviour")

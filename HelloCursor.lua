@@ -169,8 +169,11 @@ local function IsIntentionalMouselookActive()
   return (GetTime() - downAt) >= RMB_HOLD_THRESHOLD
 end
 
+local NormalizeHex = HC.NormalizeHex or (HC.Util and HC.Util.NormalizeHex)
+
 local function GetNormalizedColorHex()
-  return (HC.Util and HC.Util.NormalizeHex and HC.Util.NormalizeHex(HelloCursorDB.colorHex)) or DEFAULTS.colorHex
+  return (NormalizeHex and NormalizeHex(HelloCursorDB.colorHex))
+    or DEFAULTS.colorHex
 end
 
 local VALID_SIZES = {
