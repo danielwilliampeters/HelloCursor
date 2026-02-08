@@ -20,9 +20,9 @@ HC.TUNE = {
 
   -- Neon overlay alphas
   NEON_ALPHA_BASE  = 1.00,
-  NEON_ALPHA_CORE  = 0.95,
-  NEON_ALPHA_INNER = 0.75,
-  NEON_ALPHA_EDGE = 0.70,
+  NEON_ALPHA_CORE  = 1.00,
+  NEON_ALPHA_INNER = 0.45,
+  NEON_ALPHA_EDGE = 0.55,
 
   -- Neon GCD pulsing behaviour
   NEON_GCD_PULSE_ENABLED = true,   -- master switch for neon GCD pulsing
