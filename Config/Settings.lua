@@ -306,12 +306,12 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   colorLabel:SetPoint("TOPLEFT", previousAnchor, "BOTTOMLEFT", 0, -22)
-  colorLabel:SetText("Ring colour")
+  colorLabel:SetText("Ring Colour")
 
   pickBtnRef = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
   pickBtnRef:SetSize(120, 22)
   pickBtnRef:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -6)
-  pickBtnRef:SetText("Pick colour...")
+  pickBtnRef:SetText("Pick Colour...")
   pickBtnRef:SetScript("OnClick", OpenColorPicker)
 
   local hexLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -519,7 +519,7 @@ local function CreateSettingsPanel()
   -- Register colorHex so the Blizzard "Defaults" button resets it too,
   -- but we don't create a visible control in the main list.
   do
-    local settingColorHex = RegisterSetting("colorHex", "Ring colour (hex)", DEFAULTS.colorHex)
+    local settingColorHex = RegisterSetting("colorHex", "Ring Colour (Hex)", DEFAULTS.colorHex)
     OnChangedFor("colorHex", settingColorHex)
   end
 
@@ -546,8 +546,8 @@ local function CreateSettingsPanel()
 
   local function AddSizeDropdown()
     local key = "size"
-    local name = "Cursor ring size"
-    local tooltip = "Adjust the size of the cursor ring."
+    local name = "Cursor Ring Size"
+    local tooltip = "Adjust the size of the Cursor Ring."
 
     local defaultValue = DEFAULTS[key] or 96
     local current = tonumber(HelloCursorDB[key]) or defaultValue
@@ -579,8 +579,8 @@ local function CreateSettingsPanel()
 
   local function AddStyleDropdown()
     local key = "classicRingStyle"
-    local name = "Cursor ring appearance"
-    local tooltip = "Choose the visual style of the cursor ring."
+    local name = "Cursor Ring Appearance"
+    local tooltip = "Choose the visual style of the Cursor Ring."
 
     local defaultValue = DEFAULTS[key] and true or false
 
@@ -603,8 +603,8 @@ local function CreateSettingsPanel()
 
   local function AddMouselookModeDropdown()
     local key = "mouselookMode"
-    local name = "Mouselook behaviour (RMB)"
-    local tooltip = "Controls how the cursor ring behaves while holding the right mouse button to turn the camera."
+    local name = "Mouselook Behaviour (RMB)"
+    local tooltip = "Controls how the Cursor Ring behaves while holding the right mouse button to turn the camera."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -620,9 +620,9 @@ local function CreateSettingsPanel()
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
         container:Add("none",        "None")
-        container:Add("show",        "Show while mouselooking")
-        container:Add("shrink",      "Shrink while mouselooking")
-        container:Add("show_shrink", "Show and shrink while mouselooking")
+        container:Add("show",        "Show While Mouselooking")
+        container:Add("shrink",      "Shrink While Mouselooking")
+        container:Add("show_shrink", "Show and Shrink While Mouselooking")
         return container:GetData()
       end
 
@@ -647,38 +647,38 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "hideInMenus",
-    "Hide in menus",
-    "Hide the cursor ring while menus (Esc, Settings, Options) are open."
+    "Hide in Menus",
+    "Hide the Cursor Ring while menus (Esc, Settings, Options) are open."
   )
 
   AddCheckbox(
     "showWorld",
-    "Show outside instances",
-    "Show the cursor ring outside dungeons, raids, battlegrounds, and arenas."
+    "Show Outside Instances",
+    "Show the Cursor Ring outside dungeons, raids, battlegrounds, and arenas."
   )
 
   AddCheckbox(
     "showHousing",
-    "Show in player housing",
-    "Show the cursor ring while inside player housing (houses and neighbourhoods)."
+    "Show in Player Housing",
+    "Show the Cursor Ring while inside player housing (houses and neighbourhoods)."
   )
 
   AddCheckbox(
     "showPvE",
-    "Show in PvE instances",
-    "Show the cursor ring in PvE instances (dungeons, delves, and raids)."
+    "Show in PvE Instances",
+    "Show the Cursor Ring in PvE instances (dungeons, delves, and raids)."
   )
 
   AddCheckbox(
     "showPvP",
-    "Show in PvP instances",
-    "Show the cursor ring in PvP instances (battlegrounds and arenas)."
+    "Show in PvP Instances",
+    "Show the Cursor Ring in PvP instances (battlegrounds and arenas)."
   )
 
   AddCheckbox(
     "showInCombat",
-    "Always show during combat",
-    "Always show the cursor ring while you are in combat, regardless of location or other visibility settings."
+    "Always Show During Combat",
+    "Always show the Cursor Ring while you are in combat, regardless of location or other visibility settings."
   )
 
   AddHeader("Behaviour")
@@ -687,7 +687,7 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "showGCDSpinner",
-    "Global cooldown animation",
+    "Global Cooldown Animation",
     "Show an animation on the ring that tracks the global cooldown."
   )
 
@@ -699,7 +699,7 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "useClassColor",
-    "Use class colour",
+    "Use Class Colour",
     "Tint the ring using your class colour.\n\nCustom colour is configured in Advanced settings."
   )
 
