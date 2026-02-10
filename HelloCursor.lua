@@ -500,9 +500,11 @@ local function ApplyTintIfNeeded(force)
   if neon then
     local tintA = a or 1
 
-    neonCoreNormal:SetVertexColor(r, g, b, tintA)
-    neonCoreSmall:SetVertexColor(r, g, b, tintA)
+    -- Keep the CORE white so it can actually look white
+    neonCoreNormal:SetVertexColor(1, 1, 1, tintA)
+    neonCoreSmall:SetVertexColor(1, 1, 1, tintA)
 
+    -- Tint the glow layers with your chosen colour
     neonInnerNormal:SetVertexColor(r, g, b, tintA)
     neonInnerSmall:SetVertexColor(r, g, b, tintA)
 
