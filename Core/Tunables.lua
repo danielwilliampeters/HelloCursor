@@ -20,7 +20,7 @@ HC.TUNE = {
 
   -- Neon overlay alphas
   NEON_ALPHA_BASE  = 1.00,
-  NEON_ALPHA_CORE  = 0.40,
+  NEON_ALPHA_CORE  = 0.42,
   NEON_ALPHA_INNER = 0.10,
   NEON_ALPHA_EDGE = 0.55,
 
