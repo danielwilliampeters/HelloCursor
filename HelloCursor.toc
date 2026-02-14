@@ -9,7 +9,7 @@
 ## AddonCompartmentFunc: HelloCursor_OpenSettings
 ## AddonCompartmentIcon: Interface\AddOns\HelloCursor\Assets\Icons\icon.tga
 
-Lib\Util.lua
+Core\Util.lua
 Core\Textures.lua
 Core\Tunables.lua
 HelloCursor.lua
