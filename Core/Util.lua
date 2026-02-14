@@ -70,6 +70,16 @@ local function RGBAtoHex(r, g, b)
   return string.format("%02X%02X%02X", r, g, b)
 end
 
+local function GetNormalizedColorHex()
+  local defaults = HC.DEFAULTS
+  local defaultHex = (defaults and defaults.colorHex) or DEFAULT_COLOR_HEX
+
+  local currentHex = HelloCursorDB and HelloCursorDB.colorHex
+  local norm = NormalizeHex and NormalizeHex(currentHex) or nil
+
+  return norm or defaultHex
+end
+
 local function NearestKey(map, target)
   local bestKey, bestDist
   for k in pairs(map) do
@@ -116,6 +126,7 @@ U.EaseInOut             = EaseInOut
 U.NormalizeHex          = NormalizeHex
 U.HexToRGBA             = HexToRGBA
 U.RGBAtoHex             = RGBAtoHex
+U.GetNormalizedColorHex = GetNormalizedColorHex
 U.NearestKey            = NearestKey
 U.SafeSetTexture        = SafeSetTexture
 U.GetSpellCooldownCompat = GetSpellCooldownCompat

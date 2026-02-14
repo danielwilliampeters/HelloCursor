@@ -16,6 +16,7 @@ local SyncRingStyleFlags = HC.SyncRingStyleFlags
 
 local HexToRGBA = HC.HexToRGBA
 local RGBAtoHex = HC.RGBAtoHex
+local GetNormalizedColorHex = HC.GetNormalizedColorHex
 
 local RefreshSize = HC.RefreshSize
 local UpdateRingPosition = HC.UpdateRingPosition
@@ -27,10 +28,6 @@ local SetForceShowWhilePickingColour = HC.SetForceShowWhilePickingColour
 local StartPickerCursorDriver = HC.StartPickerCursorDriver
 local StopPickerCursorDriver = HC.StopPickerCursorDriver
 local ResyncGCDVisualsAfterPicker = HC.ResyncGCDVisualsAfterPicker
-
-local function GetNormalizedColorHex()
-  return NormalizeHex(HelloCursorDB.colorHex) or DEFAULTS.colorHex
-end
 
 local function DeriveMouselookModeFromFlags(reactive, showML)
   reactive = reactive and true or false

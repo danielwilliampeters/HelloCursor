@@ -169,12 +169,7 @@ local function IsIntentionalMouselookActive()
   return (GetTime() - downAt) >= RMB_HOLD_THRESHOLD
 end
 
-local NormalizeHex = HC.NormalizeHex or (HC.Util and HC.Util.NormalizeHex)
-
-local function GetNormalizedColorHex()
-  return (NormalizeHex and NormalizeHex(HelloCursorDB.colorHex))
-    or DEFAULTS.colorHex
-end
+local GetNormalizedColorHex = HC.GetNormalizedColorHex or (HC.Util and HC.Util.GetNormalizedColorHex)
 
 local VALID_SIZES = {
   [64]  = true,
@@ -508,8 +503,8 @@ local function ApplyTintIfNeeded(force)
     neonInnerNormal:SetVertexColor(r, g, b, tintA)
     neonInnerSmall:SetVertexColor(r, g, b, tintA)
 
-    neonEdgeNormal:SetVertexColor(r, g, b, tintA)
-    neonEdgeSmall:SetVertexColor(r, g, b, tintA)
+    neonEdgeNormal:SetVertexColor(1, 1, 1, tintA)
+    neonEdgeSmall:SetVertexColor(1, 1, 1, tintA)
   end
 end
 
@@ -766,11 +761,11 @@ SetMix = function(mix)
       -- We blend between steady neon and pulsing neon using pulseStrength.
       local corePulse  = HC.Util.Lerp(HC.TUNE.NEON_PULSE_CORE_MIN,  HC.TUNE.NEON_PULSE_CORE_MAX,  osc)
       -- local innerPulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_INNER_MIN, HC.TUNE.NEON_PULSE_INNER_MAX, osc)
-      -- local edgePulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_EDGE_MIN, HC.TUNE.NEON_PULSE_EDGE_MAX, osc)
+      local edgePulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_EDGE_MIN, HC.TUNE.NEON_PULSE_EDGE_MAX, osc)
 
       coreBase  = HC.Util.Lerp(coreBase,  corePulse,  pulseStrength)
       -- innerBase = HC.Util.Lerp(innerBase, innerPulse, pulseStrength)
-      -- edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
+      edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
     end
 
     if mix <= 0.0001 then
@@ -1135,6 +1130,7 @@ HC.NearestKey = HC.Util and HC.Util.NearestKey or nil
 
 HC.HexToRGBA = HC.Util and HC.Util.HexToRGBA or nil
 HC.RGBAtoHex = HC.Util and HC.Util.RGBAtoHex or nil
+HC.GetNormalizedColorHex = HC.Util and HC.Util.GetNormalizedColorHex or nil
 
 HC.RefreshSize = RefreshSize
 HC.UpdateRingPosition = UpdateRingPosition

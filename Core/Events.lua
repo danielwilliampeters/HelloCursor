@@ -13,7 +13,12 @@ eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
     HelloCursorDB = HC.CopyDefaults(HelloCursorDB, HC.DEFAULTS)
-    HelloCursorDB.colorHex = HC.NormalizeHex(HelloCursorDB.colorHex) or HC.DEFAULTS.colorHex
+    if HC.GetNormalizedColorHex then
+      HelloCursorDB.colorHex = HC.GetNormalizedColorHex()
+    else
+      HelloCursorDB.colorHex = (HC.NormalizeHex and HC.NormalizeHex(HelloCursorDB.colorHex))
+        or (HC.DEFAULTS and HC.DEFAULTS.colorHex)
+    end
 
     -- Legacy migration only (authoritative normalization lives in core)
     local size = tonumber(HelloCursorDB.size)
