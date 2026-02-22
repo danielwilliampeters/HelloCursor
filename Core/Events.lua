@@ -12,6 +12,15 @@ eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
+    -- Ensure SavedVariables table exists
+    HelloCursorDB = HelloCursorDB or {}
+
+    -- Migrate legacy visibility flags before seeding defaults.
+    if HC.SyncVisibilityFlagsFromLegacy then
+      HC.SyncVisibilityFlagsFromLegacy()
+    end
+
+    -- Now layer defaults on top for any keys that are still nil.
     HelloCursorDB = HC.CopyDefaults(HelloCursorDB, HC.DEFAULTS)
     if HC.GetNormalizedColorHex then
       HelloCursorDB.colorHex = HC.GetNormalizedColorHex()

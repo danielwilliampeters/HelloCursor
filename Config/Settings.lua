@@ -57,6 +57,42 @@ local function ApplyMouselookModeToFlags(mode)
   HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
 end
 
+local function DeriveInstanceHideModeFromFlags(doNotShowPvE, doNotShowPvP)
+  doNotShowPvE = doNotShowPvE and true or false
+  doNotShowPvP = doNotShowPvP and true or false
+
+  if doNotShowPvE and doNotShowPvP then
+    return "all"
+  elseif doNotShowPvE then
+    return "pve"
+  elseif doNotShowPvP then
+    return "pvp"
+  end
+
+  return "none"
+end
+
+local function ApplyInstanceHideModeToFlags(mode)
+  mode = tostring(mode or DeriveInstanceHideModeFromFlags(DEFAULTS.doNotShowPvE, DEFAULTS.doNotShowPvP))
+
+  local doNotShowPvE, doNotShowPvP
+  if mode == "all" then
+    doNotShowPvE, doNotShowPvP = true, true
+  elseif mode == "pve" then
+    doNotShowPvE, doNotShowPvP = true, false
+  elseif mode == "pvp" then
+    doNotShowPvE, doNotShowPvP = false, true
+  else
+    doNotShowPvE, doNotShowPvP = false, false
+  end
+
+  HelloCursorDB.doNotShowPvE = doNotShowPvE
+  HelloCursorDB.doNotShowPvP = doNotShowPvP
+
+  HelloCursorDB["HelloCursor_doNotShowPvE"] = doNotShowPvE
+  HelloCursorDB["HelloCursor_doNotShowPvP"] = doNotShowPvP
+end
+
 -- ---------------------------------------------------------------------
 -- Settings UI (Blizzard Settings panel)
 -- ---------------------------------------------------------------------
@@ -181,6 +217,12 @@ local function ResetToDefaults()
   HelloCursorDB.size = DEFAULTS.size
   HelloCursorDB.colorMode = DEFAULTS.colorMode
 
+  -- Keep instance visibility dropdown in sync with PvE/PvP defaults
+  HelloCursorDB.instanceHideMode = DeriveInstanceHideModeFromFlags(
+    HelloCursorDB.doNotShowPvE,
+    HelloCursorDB.doNotShowPvP
+  )
+
   -- Keep legacy mouselook booleans in sync with the new mode
   ApplyMouselookModeToFlags(HelloCursorDB.mouselookMode)
 
@@ -191,14 +233,16 @@ local function ResetToDefaults()
   -- Settings controls match defaults on reload.
   local tracked = {
     "enabled",
-    "showWorld",
-    "showHousing",
-    "showPvE",
-    "showPvP",
+    "alwaysShow",
     "showInCombat",
+    "hideInMenus",
+    "doNotShowWorld",
+    "doNotShowHousing",
+    "doNotShowPvE",
+    "doNotShowPvP",
+    "instanceHideMode",
     "mouselookMode",
     "showGCDSpinner",
-    "hideInMenus",
     "size",
     "colorMode",
     "colorHex",
@@ -501,12 +545,17 @@ local function CreateSettingsPanel()
       elseif key == "classicRingStyle" then
         HC.ApplyRingStyleChange()
 
-      elseif key == "showWorld"
-        or key == "showHousing"
-        or key == "showPvE"
-        or key == "showPvP"
+      elseif key == "instanceHideMode" then
+        ApplyInstanceHideModeToFlags(HelloCursorDB.instanceHideMode)
+        ForceVisibilityRecompute()
+
+      elseif key == "doNotShowWorld"
+        or key == "doNotShowHousing"
+        or key == "doNotShowPvE"
+        or key == "doNotShowPvP"
         or key == "showInCombat"
         or key == "hideInMenus"
+        or key == "alwaysShow"
         or key == "enabled" then
         ForceVisibilityRecompute()
       end
@@ -606,6 +655,66 @@ local function CreateSettingsPanel()
     return setting
   end
 
+  local function AddInstanceModeDropdown()
+    local key = "instanceHideMode"
+    local name = "Do Not Show in Instances"
+    local tooltip =
+      "Controls where the Cursor Ring is hidden in instanced content.\n" ..
+      "None: Show in all instances.\n" ..
+      "PvE Instances: Hide in dungeons, delves, and raids.\n" ..
+      "PvP Instances: Hide in battlegrounds and arenas.\n" ..
+      "All Instances: Hide in all instanced content."
+
+    local defaultValue = DeriveInstanceHideModeFromFlags(
+      DEFAULTS.doNotShowPvE,
+      DEFAULTS.doNotShowPvP
+    )
+    if defaultValue ~= "none" and defaultValue ~= "pve" and defaultValue ~= "pvp" and defaultValue ~= "all" then
+      defaultValue = "none"
+    end
+
+    -- Derive from the authoritative PvE/PvP flags first so that
+    -- legacy showPvE/showPvP values (migrated into doNotShow*)
+    -- correctly drive the initial dropdown selection.
+    local derived = DeriveInstanceHideModeFromFlags(
+      HelloCursorDB.doNotShowPvE,
+      HelloCursorDB.doNotShowPvP
+    )
+    if derived ~= "none" and derived ~= "pve" and derived ~= "pvp" and derived ~= "all" then
+      derived = defaultValue
+    end
+
+    local current = HelloCursorDB[key]
+    if type(current) ~= "string" or (current ~= "none" and current ~= "pve" and current ~= "pvp" and current ~= "all") then
+      current = derived
+    else
+      -- If a previously saved value disagrees with the flags,
+      -- treat the flags as ground truth and repair the stored mode.
+      if current ~= derived then
+        current = derived
+      end
+    end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("none", "None")
+        container:Add("pve", "PvE Instances")
+        container:Add("pvp", "PvP Instances")
+        container:Add("all", "All Instances")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
   local function AddMouselookModeDropdown()
     local key = "mouselookMode"
     local name = "Mouselook Behaviour (RMB)"
@@ -682,42 +791,36 @@ local function CreateSettingsPanel()
   )
 
   AddCheckbox(
-    "hideInMenus",
-    "Hide in Menus",
-    "Hide the Cursor Ring while menus (Esc, Settings, Options) are open."
-  )
-
-  AddCheckbox(
-    "showWorld",
-    "Show Outside Instances",
-    "Show the Cursor Ring outside dungeons, raids, battlegrounds, and arenas."
-  )
-
-  AddCheckbox(
-    "showHousing",
-    "Show in Player Housing",
-    "Show the Cursor Ring while inside player housing (houses and neighbourhoods)."
-  )
-
-  AddCheckbox(
-    "showPvE",
-    "Show in PvE Instances",
-    "Show the Cursor Ring in PvE instances (dungeons, delves, and raids)."
-  )
-
-  AddCheckbox(
-    "showPvP",
-    "Show in PvP Instances",
-    "Show the Cursor Ring in PvP instances (battlegrounds and arenas)."
+    "alwaysShow",
+    "Always Show Cursor Ring",
+    "Always show the Cursor Ring in all locations except those you explicitly disable below."
   )
 
   AddCheckbox(
     "showInCombat",
-    "Always Show During Combat",
-    "Always show the Cursor Ring while you are in combat, regardless of location or other visibility settings."
+    "Always Show in Combat",
+    "Forces the cursor ring to show during combat. Overrides \"Do Not Show\" options. Ignored when \"Always Show\" is enabled."
   )
 
-  AddHeader("Behaviour")
+  AddCheckbox(
+    "doNotShowWorld",
+    "Do Not Show Outside Instances",
+    "Do not show the Cursor Ring outside dungeons, raids, battlegrounds, and arenas."
+  )
+
+  AddInstanceModeDropdown()
+
+  AddCheckbox(
+    "doNotShowHousing",
+    "Do Not Show in Player Housing",
+    "Do not show the Cursor Ring while inside player housing (houses and neighbourhoods)."
+  )
+
+  AddCheckbox(
+    "hideInMenus",
+    "Do Not Show in Menus",
+    "Do not show the Cursor Ring while menus (Esc, Settings, Options) are open."
+  )
 
   AddMouselookModeDropdown()
 
@@ -726,8 +829,6 @@ local function CreateSettingsPanel()
     "Global Cooldown Animation",
     "Show an animation on the ring that tracks the global cooldown."
   )
-
-  AddHeader("Appearance")
 
   AddSizeDropdown()
 

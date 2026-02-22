@@ -18,15 +18,17 @@ local DEFAULTS = {
   enabled = true,
   colorHex = "FF4FD8",
   colorMode = "default",
-  showWorld = true,
-  showHousing = false,
-  showPvE = true,
-  showPvP = true,
   showInCombat = true,
   hideInMenus = true,
-  mouselookMode = "show_shrink",
+  alwaysShow = true,
+  doNotShowWorld = false,
+  doNotShowHousing = false,
+  doNotShowPvE = false,
+  doNotShowPvP = false,
+  mouselookMode = "shrink",
   showGCDSpinner = true,
   classicRingStyle = false,
+  size = 64,
 }
 
 local function SyncRingStyleFlags()
@@ -91,6 +93,123 @@ local function SyncColorModeFromLegacy()
   local isClass = (mode == "class")
   HelloCursorDB.useClassColor = isClass
   HelloCursorDB["HelloCursor_useClassColor"] = isClass
+end
+
+-- ---------------------------------------------------------------------
+-- Visibility flags migration (zone/menu behaviour)
+-- ---------------------------------------------------------------------
+
+local function SyncVisibilityFlagsFromLegacy()
+  HelloCursorDB = HelloCursorDB or {}
+  local db = HelloCursorDB
+
+  local function BoolOrNil(v)
+    if v == nil then return nil end
+    return v and true or false
+  end
+
+  -- Menus: keep existing semantics (hideInMenus = true means "do not show in menus").
+  if db.hideInMenus == nil then
+    db.hideInMenus = DEFAULTS.hideInMenus and true or false
+  else
+    db.hideInMenus = db.hideInMenus and true or false
+  end
+  db["HelloCursor_hideInMenus"] = db.hideInMenus
+
+  -- Always Show: treat as a new setting with its own default.
+  if db.alwaysShow == nil then
+    db.alwaysShow = DEFAULTS.alwaysShow and true or false
+  else
+    db.alwaysShow = db.alwaysShow and true or false
+  end
+
+  db["HelloCursor_alwaysShow"] = db.alwaysShow
+
+  -- Legacy zone flags (positive semantics)
+  local legacyShowWorld    = BoolOrNil(db.showWorld)
+  local legacyShowHousing  = BoolOrNil(db.showHousing)
+  local legacyShowPvE      = BoolOrNil(db.showPvE)
+  local legacyShowPvP      = BoolOrNil(db.showPvP)
+
+  local nsShowWorld   = BoolOrNil(db["HelloCursor_showWorld"])
+  local nsShowHousing = BoolOrNil(db["HelloCursor_showHousing"])
+  local nsShowPvE     = BoolOrNil(db["HelloCursor_showPvE"])
+  local nsShowPvP     = BoolOrNil(db["HelloCursor_showPvP"])
+
+  if legacyShowWorld == nil and nsShowWorld ~= nil then
+    legacyShowWorld = nsShowWorld
+  end
+  if legacyShowHousing == nil and nsShowHousing ~= nil then
+    legacyShowHousing = nsShowHousing
+  end
+  if legacyShowPvE == nil and nsShowPvE ~= nil then
+    legacyShowPvE = nsShowPvE
+  end
+  if legacyShowPvP == nil and nsShowPvP ~= nil then
+    legacyShowPvP = nsShowPvP
+  end
+
+  -- Derive effective legacy behaviour, falling back to the new
+  -- negative-style defaults (doNotShow*).
+  local defaultShowWorld   = (DEFAULTS.doNotShowWorld   == true) and false or true
+  local defaultShowHousing = (DEFAULTS.doNotShowHousing == true) and false or true
+  local defaultShowPvE     = (DEFAULTS.doNotShowPvE     == true) and false or true
+  local defaultShowPvP     = (DEFAULTS.doNotShowPvP     == true) and false or true
+
+  if legacyShowWorld == nil then
+    legacyShowWorld = defaultShowWorld
+  end
+
+  if legacyShowHousing == nil then
+    legacyShowHousing = defaultShowHousing
+  end
+
+  if legacyShowPvE == nil then
+    legacyShowPvE = defaultShowPvE
+  end
+
+  if legacyShowPvP == nil then
+    legacyShowPvP = defaultShowPvP
+  end
+
+  -- New negative-style flags: "Do Not Show in ...".
+  if db.doNotShowWorld == nil then
+    db.doNotShowWorld = not legacyShowWorld
+  else
+    db.doNotShowWorld = db.doNotShowWorld and true or false
+  end
+  if db.doNotShowHousing == nil then
+    db.doNotShowHousing = not legacyShowHousing
+  else
+    db.doNotShowHousing = db.doNotShowHousing and true or false
+  end
+  if db.doNotShowPvE == nil then
+    db.doNotShowPvE = not legacyShowPvE
+  else
+    db.doNotShowPvE = db.doNotShowPvE and true or false
+  end
+  if db.doNotShowPvP == nil then
+    db.doNotShowPvP = not legacyShowPvP
+  else
+    db.doNotShowPvP = db.doNotShowPvP and true or false
+  end
+
+  -- Keep namespaced versions in sync for Settings UI.
+  db["HelloCursor_doNotShowWorld"]   = db.doNotShowWorld
+  db["HelloCursor_doNotShowHousing"] = db.doNotShowHousing
+  db["HelloCursor_doNotShowPvE"]     = db.doNotShowPvE
+  db["HelloCursor_doNotShowPvP"]     = db.doNotShowPvP
+
+  -- Maintain legacy positive flags for backwards compatibility.
+  db.showWorld   = not db.doNotShowWorld
+  db.showHousing = not db.doNotShowHousing
+  db.showPvE     = not db.doNotShowPvE
+  db.showPvP     = not db.doNotShowPvP
+
+  db["HelloCursor_showWorld"]   = db.showWorld
+  db["HelloCursor_showHousing"] = db.showHousing
+  db["HelloCursor_showPvE"]     = db.showPvE
+  db["HelloCursor_showPvP"]     = db.showPvP
 end
 
 -- ---------------------------------------------------------------------
@@ -176,13 +295,9 @@ local function IsMouselookShrinkEnabled()
       or HelloCursorDB.mouselookMode == "show_shrink"
 end
 
--- Seed / migrate mouselook mode once on load. This only relies on
--- HelloCursorDB's own fields and does not need to wait for events.
+-- Run DB migrations that do not depend on events.
 SyncMouselookModeFromLegacy()
-
--- Note: full migration of settings that depend on SavedVariables
--- (colour mode, etc.) is performed in Core/Events on ADDON_LOADED,
--- after HelloCursorDB has been populated by the client.
+SyncVisibilityFlagsFromLegacy()
 
 -- ---------------------------------------------------------------------
 -- Small utils
@@ -280,25 +395,29 @@ local function IsInHousingZone()
   return false
 end
 
+local function IsAllowedInZoneByLocationOnly()
+  if IsInHousingZone() then
+    return not HelloCursorDB.doNotShowHousing
+  end
+
+  local inInstance, instanceType = IsInInstance()
+  if not inInstance then
+    return not HelloCursorDB.doNotShowWorld
+  end
+
+  if instanceType == "pvp" or instanceType == "arena" then
+    return not HelloCursorDB.doNotShowPvP
+  end
+
+  return not HelloCursorDB.doNotShowPvE
+end
+
 local function IsAllowedInZone()
   if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
     return true
   end
 
-  if IsInHousingZone() then
-    return HelloCursorDB.showHousing ~= false
-  end
-
-  local inInstance, instanceType = IsInInstance()
-  if not inInstance then
-    return HelloCursorDB.showWorld
-  end
-
-  if instanceType == "pvp" or instanceType == "arena" then
-    return HelloCursorDB.showPvP
-  end
-
-  return HelloCursorDB.showPvE
+  return IsAllowedInZoneByLocationOnly()
 end
 
 -- Temporary override: allow ring to show while using the colour picker
@@ -313,8 +432,7 @@ local function ShouldShowRing()
     return false
   end
 
-  -- While the colour picker is open, force the ring to be visible
-  -- regardless of per-zone / menu visibility settings.
+  -- While the colour picker is open, always show the ring.
   if forceShowWhilePickingColour then
     return true
   end
@@ -323,11 +441,19 @@ local function ShouldShowRing()
     return false
   end
 
-  -- Optional override: always show the ring while mouselooking,
-  -- even if the current zone would normally hide it. This still
-  -- respects the "hide in menus" rule above.
+  -- Optionally show while intentional mouselook, even if the zone would hide it.
   if IsMouselookShowEnabled() and IsIntentionalMouselookActive() then
     return true
+  end
+
+  -- Optionally always show during combat (still respects menus / enabled state).
+  if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
+    return true
+  end
+
+  -- Optionally ignore combat gating but respect per-zone visibility.
+  if HelloCursorDB.alwaysShow then
+    return IsAllowedInZoneByLocationOnly()
   end
 
   return IsAllowedInZone()
@@ -873,7 +999,7 @@ UpdateRingPosition = function()
   ringFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
 end
 
--- Capture cursor before mouselook clamps it
+-- Capture cursor position before mouselook clamps it.
 if WorldFrame and WorldFrame.HookScript then
   WorldFrame:HookScript("OnMouseDown", function(_, button)
     if button == "RightButton" then
@@ -997,8 +1123,7 @@ local function UpdateVisibility()
   end
 end
 
--- Always-on driver (lightweight) to react to menu open/close without relying on events.
--- Optimised: only does work when the addon is enabled AND when menu state actually changes.
+-- Lightweight driver to react to menu and mouselook changes without extra events.
 local visibilityDriver = CreateFrame("Frame")
 local visElapsed = 0
 local lastMenuOpen = nil
@@ -1013,7 +1138,6 @@ local function ForceVisibilityRecompute()
 end
 
 visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
-  -- If the addon is off, do nothing.
   if not (HC.Util and HC.Util.IsAddonEnabled and HC.Util.IsAddonEnabled()) then
     if lastShouldShow ~= false then
       lastShouldShow = false
@@ -1023,14 +1147,12 @@ visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
   end
 
   visElapsed = visElapsed + (elapsed or 0)
-  if visElapsed < 0.10 then return end -- 10Hz is plenty for these checks
+  if visElapsed < 0.10 then return end
   visElapsed = 0
 
   local menuOpen = HelloCursorDB.hideInMenus and IsAnyMenuOpen() or false
   local mouselookActive = IsIntentionalMouselookActive()
 
-  -- Only recompute visibility if menu state flipped (open/close),
-  -- mouselook state changed (for the override), or if we don't have a baseline yet.
   if lastMenuOpen == nil
     or menuOpen ~= lastMenuOpen
     or (IsMouselookShowEnabled() and mouselookActive ~= lastMouselookActive)
@@ -1051,16 +1173,12 @@ local lastTargetMix = 0
 ringFrame:SetScript("OnUpdate", function(_, elapsed)
   if not ringFrame:IsShown() then return end
 
-  -- While the colour picker is active, completely lock the ring to
-  -- the default (large) size and skip all reactive mouselook tweening.
   if forceShowWhilePickingColour then
     lastTargetMix = 0
 
-    -- hard stop any tweening / mix changes
     if tweenActive then StopTween() end
     SetMix(0)
 
-    -- absolutely no GCD logic while picker is open
     gcdCheckAccum = 0
     lastGCDBusy = false
     lastGCDRemaining = 0
@@ -1079,7 +1197,7 @@ ringFrame:SetScript("OnUpdate", function(_, elapsed)
   if targetMix ~= lastTargetMix then
     lastTargetMix = targetMix
     if HelloCursorDB.showGCDSpinner then
-      CheckGCDPop() -- sync flags immediately on RMB toggle
+      CheckGCDPop()
     end
   end
 
@@ -1159,3 +1277,4 @@ HC.ApplyTintIfNeeded = ApplyTintIfNeeded
 HC.IsAddonEnabled = HC.Util and HC.Util.IsAddonEnabled or nil
 HC.SyncRingStyleFlags = SyncRingStyleFlags
 HC.SyncColorModeFromLegacy = SyncColorModeFromLegacy
+HC.SyncVisibilityFlagsFromLegacy = SyncVisibilityFlagsFromLegacy
