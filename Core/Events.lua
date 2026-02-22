@@ -9,6 +9,7 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
@@ -56,6 +57,15 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     end
 
     print("|cFF00FF00HelloCursor:|r v" .. HC.VERSION .. " Loaded. Use |cFFFFA500/hc|r to open options.")
+    return
+  end
+
+  -- For target changes we generally only need to refresh the tint, so
+  -- avoid kicking the full visibility pipeline unless necessary.
+  if event == "PLAYER_TARGET_CHANGED" then
+    if HelloCursorDB and HelloCursorDB.colorMode == "reaction" then
+      HC.ApplyTintIfNeeded(false)
+    end
     return
   end
 

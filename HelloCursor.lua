@@ -66,12 +66,12 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Prefer the Settings-backed value if it's valid
-  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class") then
+  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "reaction") then
     mode = nsMode
   end
 
   -- If still invalid, migrate from legacy boolean
-  if mode ~= "default" and mode ~= "class" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" then
     mode = legacy and "class" or "default"
   end
 
@@ -82,7 +82,7 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Final clamp
-  if mode ~= "default" and mode ~= "class" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" then
     mode = "default"
   end
 
@@ -308,6 +308,8 @@ local GetCursorPosition   = GetCursorPosition
 local IsMouselooking      = IsMouselooking
 local UnitAffectingCombat = UnitAffectingCombat
 local IsInInstance        = IsInInstance
+local UnitReaction        = UnitReaction
+local UnitExists          = UnitExists
 local math_abs            = math.abs
 
 local function IsMouselookActive()
@@ -576,11 +578,15 @@ end
 
 local function SetStyleVisibility()
   local neon = IsNeonStyle()
-  local showSmall = not forceShowWhilePickingColor
-
-  -- While using the color picker we completely disable the small
-  -- ring textures so only the default ring can ever be shown,
-  -- regardless of mix or any other visual state.
+  -- Only enable the small ring textures when the shrink behaviour is
+  -- available (i.e. shrink mode is enabled). Actual visibility of the
+  -- small ring is still fully driven by the mix/alpha crossfade; this
+  -- just avoids ever showing small textures when shrink is disabled.
+  --
+  -- While using the color picker we completely disable the small ring
+  -- textures so only the default ring can ever be shown, regardless of
+  -- mix or any other visual state.
+  local showSmall = (not forceShowWhilePickingColor) and IsMouselookShrinkEnabled()
   SetShownSafe(ringTexNormal, true)
   SetShownSafe(ringTexSmall,  showSmall)
 
@@ -593,15 +599,36 @@ local function SetStyleVisibility()
 end
 
 -- ---------------------------------------------------------------------
--- Color (class color or hex)
+-- Color (class / reaction / hex)
 -- ---------------------------------------------------------------------
 
 local lastTintKey = nil
+
+local function ComputeReactionTint()
+  if not (UnitExists and UnitReaction and FACTION_BAR_COLORS) then return nil end
+  if not UnitExists("target") then return nil end
+
+  local reaction = UnitReaction("target", "player")
+  if not reaction then return nil end
+
+  local c = FACTION_BAR_COLORS[reaction]
+  if not c then return nil end
+
+  return c.r, c.g, c.b, 1, ("reaction:%d"):format(reaction)
+end
 
 local function ComputeTint()
   if HelloCursorDB.colorMode == "class" then
     local r, g, b = HC.Util.GetPlayerClassRGB()
     return r, g, b, 1, ("class:%0.4f:%0.4f:%0.4f"):format(r, g, b)
+  end
+
+  if HelloCursorDB.colorMode == "reaction" then
+    local r, g, b, a, key = ComputeReactionTint()
+    if r and g and b then
+      return r, g, b, a, key
+    end
+    -- fall through to default hex if reaction color is unavailable
   end
 
   local r, g, b, a = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
@@ -620,22 +647,34 @@ local function ApplyTintIfNeeded(force)
       gcdSpinnerSmall:SetSwipeColor(r, g, b, a or 1)
     end
     lastTintKey = key
+
+    -- Safety clamp: whenever shrink is not actively engaged, ensure
+    -- the small ring (and its neon overlays) are fully hidden so a
+    -- reaction color / tint update can never briefly reveal the
+    -- smaller base ring.
+    if not (WantsSmallRing and WantsSmallRing()) then
+      ringTexSmall:SetAlpha(0)
+      neonCoreSmall:SetAlpha(0)
+      neonInnerSmall:SetAlpha(0)
+      neonEdgeSmall:SetAlpha(0)
+    end
   end
 
   local neon = IsNeonStyle()
   if neon then
-    local tintA = a or 1
+    -- Keep the CORE and EDGE white; only tint RGB. Alpha for all
+    -- neon layers is driven exclusively via SetAlpha in SetMix so we
+    -- never accidentally "override" the configured neon opacity
+    -- when the tint changes (fixes brief fully-white flashes).
+    neonCoreNormal:SetVertexColor(1, 1, 1)
+    neonCoreSmall:SetVertexColor(1, 1, 1)
 
-    -- Keep the CORE white so it can actually look white
-    neonCoreNormal:SetVertexColor(1, 1, 1, tintA)
-    neonCoreSmall:SetVertexColor(1, 1, 1, tintA)
+    -- Tint the glow layers with your chosen color (RGB only)
+    neonInnerNormal:SetVertexColor(r, g, b)
+    neonInnerSmall:SetVertexColor(r, g, b)
 
-    -- Tint the glow layers with your chosen color
-    neonInnerNormal:SetVertexColor(r, g, b, tintA)
-    neonInnerSmall:SetVertexColor(r, g, b, tintA)
-
-    neonEdgeNormal:SetVertexColor(1, 1, 1, tintA)
-    neonEdgeSmall:SetVertexColor(1, 1, 1, tintA)
+    neonEdgeNormal:SetVertexColor(1, 1, 1)
+    neonEdgeSmall:SetVertexColor(1, 1, 1)
   end
 end
 
@@ -860,18 +899,28 @@ SetMix = function(mix)
   end
 
   -- Normal crossfade (BASE ring always)
+  --
+  -- Only allow the "small" ring to become visible while the shrink
+  -- behaviour is actually active (WantsSmallRing). This prevents any
+  -- brief small-ring flash when shrink is enabled but you're not
+  -- intentionally mouselooking (e.g. when reaction color updates on
+  -- hard target / target clear).
+  local effectiveMix = mix
+  if not (WantsSmallRing and WantsSmallRing()) then
+    effectiveMix = 0
+  end
   local baseMul = 1
   if neon then baseMul = HC.TUNE.NEON_ALPHA_BASE end
 
-  if mix <= 0.0001 then
+  if effectiveMix <= 0.0001 then
     ringTexNormal:SetAlpha(1 * baseMul)
     ringTexSmall:SetAlpha(0)
-  elseif mix >= 0.9999 then
+  elseif effectiveMix >= 0.9999 then
     ringTexNormal:SetAlpha(0)
     ringTexSmall:SetAlpha(1 * baseMul)
   else
-    ringTexNormal:SetAlpha((1 - mix) * baseMul)
-    ringTexSmall:SetAlpha(mix * baseMul)
+    ringTexNormal:SetAlpha((1 - effectiveMix) * baseMul)
+    ringTexSmall:SetAlpha(effectiveMix * baseMul)
   end
 
   -- Neon overlays (only when neon style enabled)
@@ -899,21 +948,21 @@ SetMix = function(mix)
       edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
     end
 
-    if mix <= 0.0001 then
+    if effectiveMix <= 0.0001 then
       neonCoreNormal:SetAlpha(coreBase);   neonCoreSmall:SetAlpha(0)
       neonInnerNormal:SetAlpha(innerBase); neonInnerSmall:SetAlpha(0)
       neonEdgeNormal:SetAlpha(edgeBase); neonEdgeSmall:SetAlpha(0)
-    elseif mix >= 0.9999 then
+    elseif effectiveMix >= 0.9999 then
       neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(coreBase)
       neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(innerBase)
       neonEdgeNormal:SetAlpha(0); neonEdgeSmall:SetAlpha(edgeBase)
     else
-      local aN = 1 - mix
-      local aS = mix
+      local aN = 1 - effectiveMix
+      local aS = effectiveMix
       neonCoreNormal:SetAlpha(aN * coreBase);   neonCoreSmall:SetAlpha(aS * coreBase)
       neonInnerNormal:SetAlpha(aN * innerBase); neonInnerSmall:SetAlpha(aS * innerBase)
-      neonEdgeNormal:SetAlpha((1 - mix) * edgeBase)
-      neonEdgeSmall:SetAlpha(mix * edgeBase)
+      neonEdgeNormal:SetAlpha(aN * edgeBase)
+      neonEdgeSmall:SetAlpha(aS * edgeBase)
     end
   else
     -- ensure overlays are invisible if neon is off

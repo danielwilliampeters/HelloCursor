@@ -115,7 +115,7 @@ end
 
 local function RefreshColorUIEnabledState()
   local mode = HelloCursorDB and HelloCursorDB.colorMode or "default"
-  local enabled = (mode ~= "class")
+  local enabled = (mode == "default")
   if pickBtnRef then pickBtnRef:SetEnabled(enabled) end
   if hexEditBox then
     hexEditBox:SetEnabled(enabled)
@@ -143,7 +143,7 @@ local function SetColorHex(hex)
 end
 
 local function OpenColorPicker()
-  if HelloCursorDB.colorMode == "class" then return end
+  if HelloCursorDB.colorMode ~= "default" then return end
 
   local picker = GetPickerWidget()
   if not picker then
@@ -372,7 +372,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   end)
 
   hexEditBox:SetScript("OnEnterPressed", function(self)
-    if HelloCursorDB.colorMode == "class" then
+    if HelloCursorDB.colorMode ~= "default" then
       self:ClearFocus()
       return
     end
@@ -394,7 +394,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local hint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
-  hint:SetText("Use RRGGBB (example: FF4FD8). Class color mode disables picker & hex.")
+  hint:SetText("Use RRGGBB (example: FF4FD8). Class/Reaction color modes disable picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
   -- Advanced utility: reset hex to the default ring color
@@ -751,11 +751,12 @@ local function CreateSettingsPanel()
     local name = "Ring Color"
     local tooltip =
       "Default uses your configured color (Advanced).\n" ..
-      "Class color uses class specific colors."
+      "Class color uses class specific colors.\n" ..
+      "Reaction color uses target reaction (friendly/neutral/hostile)."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
-    if current ~= "default" and current ~= "class" then
+    if current ~= "default" and current ~= "class" and current ~= "reaction" then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -768,6 +769,7 @@ local function CreateSettingsPanel()
         local container = Settings.CreateControlTextContainer()
         container:Add("default", "Default")
         container:Add("class", "Class Color")
+        container:Add("reaction", "Reaction Color")
         return container:GetData()
       end
 
