@@ -790,6 +790,8 @@ local function CreateSettingsPanel()
     "Turns Hello Cursor on or off."
   )
 
+  AddHeader("Display")
+
   AddCheckbox(
     "alwaysShow",
     "Always Show Cursor Ring",
