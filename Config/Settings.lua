@@ -24,7 +24,7 @@ local StopTween = HC.StopTween
 local SetMix = HC.SetMix
 
 local ForceVisibilityRecompute = HC.ForceVisibilityRecompute
-local SetForceShowWhilePickingColour = HC.SetForceShowWhilePickingColour
+local SetForceShowWhilePickingColor = HC.SetForceShowWhilePickingColor
 local StartPickerCursorDriver = HC.StartPickerCursorDriver
 local StopPickerCursorDriver = HC.StopPickerCursorDriver
 local ResyncGCDVisualsAfterPicker = HC.ResyncGCDVisualsAfterPicker
@@ -113,7 +113,7 @@ local function GetPickerWidget()
   return nil
 end
 
-local function RefreshColourUIEnabledState()
+local function RefreshColorUIEnabledState()
   local mode = HelloCursorDB and HelloCursorDB.colorMode or "default"
   local enabled = (mode ~= "class")
   if pickBtnRef then pickBtnRef:SetEnabled(enabled) end
@@ -128,7 +128,7 @@ local function RefreshOptionsUI()
     hexEditBox:SetText(GetNormalizedColorHex())
   end
 
-  RefreshColourUIEnabledState()
+  RefreshColorUIEnabledState()
 end
 
 local function SetColorHex(hex)
@@ -174,8 +174,8 @@ local function OpenColorPicker()
 
   picker:SetColorRGB(r, g, b)
 
-  -- While picking a colour, show the ring even if menus are open
-  SetForceShowWhilePickingColour(true)
+  -- While picking a color, show the ring even if menus are open
+  SetForceShowWhilePickingColor(true)
   CaptureCursorNow()
   StopTween()
   SetMix(0)
@@ -186,7 +186,7 @@ local function OpenColorPicker()
   if not ColorPickerFrame.__HelloCursorHooked then
     ColorPickerFrame.__HelloCursorHooked = true
     ColorPickerFrame:HookScript("OnHide", function()
-      SetForceShowWhilePickingColour(false)
+      SetForceShowWhilePickingColor(false)
       StopPickerCursorDriver()
       StopTween()
 
@@ -344,17 +344,17 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   local previousAnchor = title
 
   -- For legacy/canvas layout, we only use this panel for the
-  -- colour picker and related utilities. All other options live
+  -- color picker and related utilities. All other options live
   -- in the modern vertical layout Settings panel.
 
   local colorLabel = content:CreateFontString(nil, "ARTWORK", "GameFontNormal")
   colorLabel:SetPoint("TOPLEFT", previousAnchor, "BOTTOMLEFT", 0, -22)
-  colorLabel:SetText("Ring Colour")
+  colorLabel:SetText("Ring Color")
 
   pickBtnRef = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
   pickBtnRef:SetSize(120, 22)
   pickBtnRef:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -6)
-  pickBtnRef:SetText("Pick Colour...")
+  pickBtnRef:SetText("Pick Color...")
   pickBtnRef:SetScript("OnClick", OpenColorPicker)
 
   local hexLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -368,7 +368,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   hexEditBox:SetScript("OnShow", function(self)
     self:SetText(GetNormalizedColorHex())
-    RefreshColourUIEnabledState()
+    RefreshColorUIEnabledState()
   end)
 
   hexEditBox:SetScript("OnEnterPressed", function(self)
@@ -394,10 +394,10 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local hint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
-  hint:SetText("Use RRGGBB (example: FF4FD8). Class colour mode disables picker & hex.")
+  hint:SetText("Use RRGGBB (example: FF4FD8). Class color mode disables picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
-  -- Advanced utility: reset hex to the default ring colour
+  -- Advanced utility: reset hex to the default ring color
   local resetHexBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
   resetHexBtn:SetSize(120, 22)
   resetHexBtn:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 0, -8)
@@ -525,7 +525,7 @@ local function CreateSettingsPanel()
         end
 
         ApplyTintIfNeeded(true)
-        RefreshColourUIEnabledState()
+  RefreshColorUIEnabledState()
 
       elseif key == "mouselookMode" then
         ApplyMouselookModeToFlags(HelloCursorDB.mouselookMode)
@@ -573,7 +573,7 @@ local function CreateSettingsPanel()
   -- Register colorHex so the Blizzard "Defaults" button resets it too,
   -- but we don't create a visible control in the main list.
   do
-    local settingColorHex = RegisterSetting("colorHex", "Ring Colour (Hex)", DEFAULTS.colorHex)
+    local settingColorHex = RegisterSetting("colorHex", "Ring Color (Hex)", DEFAULTS.colorHex)
     OnChangedFor("colorHex", settingColorHex)
   end
 
@@ -644,7 +644,7 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
-        container:Add(false, "Neon")
+        container:Add(false, "Modern")
         container:Add(true, "Classic")
         return container:GetData()
       end
@@ -657,7 +657,7 @@ local function CreateSettingsPanel()
 
   local function AddInstanceModeDropdown()
     local key = "instanceHideMode"
-    local name = "Do Not Show in Instances"
+    local name = "Do Not Show inside Instances"
     local tooltip =
       "Controls where the Cursor Ring is hidden in instanced content.\n" ..
       "None: Show in all instances.\n" ..
@@ -748,10 +748,10 @@ local function CreateSettingsPanel()
 
   local function AddColorModeDropdown()
     local key = "colorMode"
-    local name = "Ring Colour"
+    local name = "Ring Color"
     local tooltip =
-      "Default uses your configured colour (Advanced).\n" ..
-      "Class uses your class colour."
+      "Default uses your configured color (Advanced).\n" ..
+      "Class color uses class specific colors."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
@@ -767,7 +767,7 @@ local function CreateSettingsPanel()
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
         container:Add("default", "Default")
-        container:Add("class", "Class")
+        container:Add("class", "Class Color")
         return container:GetData()
       end
 
@@ -836,7 +836,7 @@ local function CreateSettingsPanel()
 
   AddColorModeDropdown()
 
-  -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
+  -- Advanced canvas-style subcategory (color hex + utilities, legacy layout)
   CreateSettingsPanelLegacy(category, true)
 
   return HC.settingsCategory

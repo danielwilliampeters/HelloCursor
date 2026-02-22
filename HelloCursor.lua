@@ -51,7 +51,7 @@ local function SyncRingStyleFlags()
 end
 
 -- ---------------------------------------------------------------------
--- Colour mode migration (replaces useClassColor boolean)
+-- Color mode migration (replaces useClassColor boolean)
 -- ---------------------------------------------------------------------
 
 local function SyncColorModeFromLegacy()
@@ -75,7 +75,7 @@ local function SyncColorModeFromLegacy()
     mode = legacy and "class" or "default"
   end
 
-  -- Repair older saves where class colour was enabled but
+  -- Repair older saves where class color was enabled but
   -- colorMode was incorrectly left at "default".
   if mode == "default" and legacy == true then
     mode = "class"
@@ -420,11 +420,11 @@ local function IsAllowedInZone()
   return IsAllowedInZoneByLocationOnly()
 end
 
--- Temporary override: allow ring to show while using the colour picker
-local forceShowWhilePickingColour = false
+-- Temporary override: allow ring to show while using the color picker
+local forceShowWhilePickingColor = false
 
-local function SetForceShowWhilePickingColour(flag)
-  forceShowWhilePickingColour = flag and true or false
+local function SetForceShowWhilePickingColor(flag)
+  forceShowWhilePickingColor = flag and true or false
 end
 
 local function ShouldShowRing()
@@ -432,8 +432,8 @@ local function ShouldShowRing()
     return false
   end
 
-  -- While the colour picker is open, always show the ring.
-  if forceShowWhilePickingColour then
+  -- While the color picker is open, always show the ring.
+  if forceShowWhilePickingColor then
     return true
   end
 
@@ -576,9 +576,9 @@ end
 
 local function SetStyleVisibility()
   local neon = IsNeonStyle()
-  local showSmall = not forceShowWhilePickingColour
+  local showSmall = not forceShowWhilePickingColor
 
-  -- While using the colour picker we completely disable the small
+  -- While using the color picker we completely disable the small
   -- ring textures so only the default ring can ever be shown,
   -- regardless of mix or any other visual state.
   SetShownSafe(ringTexNormal, true)
@@ -593,7 +593,7 @@ local function SetStyleVisibility()
 end
 
 -- ---------------------------------------------------------------------
--- Colour (class colour or hex)
+-- Color (class color or hex)
 -- ---------------------------------------------------------------------
 
 local lastTintKey = nil
@@ -630,7 +630,7 @@ local function ApplyTintIfNeeded(force)
     neonCoreNormal:SetVertexColor(1, 1, 1, tintA)
     neonCoreSmall:SetVertexColor(1, 1, 1, tintA)
 
-    -- Tint the glow layers with your chosen colour
+    -- Tint the glow layers with your chosen color
     neonInnerNormal:SetVertexColor(r, g, b, tintA)
     neonInnerSmall:SetVertexColor(r, g, b, tintA)
 
@@ -924,9 +924,9 @@ SetMix = function(mix)
 end
 
 WantsSmallRing = function()
-  -- While the colour picker is active, always use the default (large)
+  -- While the color picker is active, always use the default (large)
   -- ring size and ignore the mouselook-based small ring.
-  if forceShowWhilePickingColour then
+  if forceShowWhilePickingColor then
     return false
   end
 
@@ -1173,7 +1173,7 @@ local lastTargetMix = 0
 ringFrame:SetScript("OnUpdate", function(_, elapsed)
   if not ringFrame:IsShown() then return end
 
-  if forceShowWhilePickingColour then
+  if forceShowWhilePickingColor then
     lastTargetMix = 0
 
     if tweenActive then StopTween() end
@@ -1262,7 +1262,7 @@ HC.SetMix = SetMix
 HC.SnapToTargetMix = SnapToTargetMix
 
 HC.ForceVisibilityRecompute = ForceVisibilityRecompute
-HC.SetForceShowWhilePickingColour = SetForceShowWhilePickingColour
+HC.SetForceShowWhilePickingColor = SetForceShowWhilePickingColor
 HC.StartPickerCursorDriver = StartPickerCursorDriver
 HC.StopPickerCursorDriver = StopPickerCursorDriver
 HC.ResyncGCDVisualsAfterPicker = ResyncGCDVisualsAfterPicker
