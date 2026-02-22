@@ -31,6 +31,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
       HC.SyncRingStyleFlags()
     end
 
+    -- Run colour mode migration now that SavedVariables are loaded,
+    -- so legacy useClassColor is correctly reflected in colorMode.
+    if HC.SyncColorModeFromLegacy then
+      HC.SyncColorModeFromLegacy()
+    end
+
     HC.CaptureCursorNow()
 
     HC.RefreshVisualsImmediate()

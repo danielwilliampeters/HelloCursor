@@ -78,7 +78,8 @@ local function GetPickerWidget()
 end
 
 local function RefreshColourUIEnabledState()
-  local enabled = not HelloCursorDB.useClassColor
+  local mode = HelloCursorDB and HelloCursorDB.colorMode or "default"
+  local enabled = (mode ~= "class")
   if pickBtnRef then pickBtnRef:SetEnabled(enabled) end
   if hexEditBox then
     hexEditBox:SetEnabled(enabled)
@@ -106,7 +107,7 @@ local function SetColorHex(hex)
 end
 
 local function OpenColorPicker()
-  if HelloCursorDB.useClassColor then return end
+  if HelloCursorDB.colorMode == "class" then return end
 
   local picker = GetPickerWidget()
   if not picker then
@@ -178,6 +179,7 @@ local function ResetToDefaults()
   
   HelloCursorDB.colorHex = DEFAULTS.colorHex
   HelloCursorDB.size = DEFAULTS.size
+  HelloCursorDB.colorMode = DEFAULTS.colorMode
 
   -- Keep legacy mouselook booleans in sync with the new mode
   ApplyMouselookModeToFlags(HelloCursorDB.mouselookMode)
@@ -198,7 +200,7 @@ local function ResetToDefaults()
     "showGCDSpinner",
     "hideInMenus",
     "size",
-    "useClassColor",
+    "colorMode",
     "colorHex",
     "classicRingStyle",
   }
@@ -326,7 +328,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   end)
 
   hexEditBox:SetScript("OnEnterPressed", function(self)
-    if HelloCursorDB.useClassColor then
+    if HelloCursorDB.colorMode == "class" then
       self:ClearFocus()
       return
     end
@@ -348,7 +350,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local hint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
-  hint:SetText("Use RRGGBB (example: FF4FD8). Class colour disables picker & hex.")
+  hint:SetText("Use RRGGBB (example: FF4FD8). Class colour mode disables picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
   -- Advanced utility: reset hex to the default ring colour
@@ -471,7 +473,13 @@ local function CreateSettingsPanel()
         RefreshSize()
         UpdateRingPosition()
 
-      elseif key == "useClassColor" or key == "colorHex" then
+      elseif key == "colorMode" or key == "colorHex" then
+        if key == "colorMode" then
+          local isClass = (HelloCursorDB.colorMode == "class") and true or false
+          HelloCursorDB.useClassColor = isClass
+          HelloCursorDB["HelloCursor_useClassColor"] = isClass
+        end
+
         ApplyTintIfNeeded(true)
         RefreshColourUIEnabledState()
 
@@ -629,6 +637,37 @@ local function CreateSettingsPanel()
     return setting
   end
 
+  local function AddColorModeDropdown()
+    local key = "colorMode"
+    local name = "Ring Colour"
+    local tooltip =
+      "Default uses your configured colour (Advanced).\n" ..
+      "Class uses your class colour."
+
+    local defaultValue = DEFAULTS[key] or "default"
+    local current = HelloCursorDB[key]
+    if current ~= "default" and current ~= "class" then
+      current = defaultValue
+    end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("default", "Default")
+        container:Add("class", "Class")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
   local function AddHeader(text)
     if layout and type(layout.AddInitializer) == "function"
       and type(CreateSettingsListSectionHeaderInitializer) == "function" then
@@ -694,11 +733,7 @@ local function CreateSettingsPanel()
 
   AddStyleDropdown()
 
-  AddCheckbox(
-    "useClassColor",
-    "Use Class Colour",
-    "Tint the ring using your class colour.\n\nCustom colour is configured in Advanced settings."
-  )
+  AddColorModeDropdown()
 
   -- Advanced canvas-style subcategory (colour hex + utilities, legacy layout)
   CreateSettingsPanelLegacy(category, true)

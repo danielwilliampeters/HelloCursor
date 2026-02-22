@@ -118,6 +118,48 @@ local function GetSpellCooldownCompat(spellID)
   return 0, 0, 0
 end
 
+local function GetPlayerClassRGB()
+  local _, classFile = UnitClass("player")
+  classFile = classFile or "PRIEST"
+
+  if C_ClassColor and C_ClassColor.GetClassColor then
+    local c = C_ClassColor.GetClassColor(classFile)
+    if c and c.GetRGB then
+      return c:GetRGB()
+    elseif c and c.r then
+      return c.r, c.g, c.b
+    end
+  end
+
+  if RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
+    local c = RAID_CLASS_COLORS[classFile]
+    return c.r, c.g, c.b
+  end
+
+  if GetClassColor then
+    local r, g, b = GetClassColor(classFile)
+    return r, g, b
+  end
+
+  return 1, 1, 1
+end
+
+local function IsAddonEnabled()
+  local nsKey = "HelloCursor_enabled"
+  local enabled = HelloCursorDB and HelloCursorDB.enabled
+  if HelloCursorDB and type(HelloCursorDB[nsKey]) == "boolean" then
+    enabled = HelloCursorDB[nsKey]
+  end
+  if enabled == nil then
+    local defaults = HC.DEFAULTS
+    enabled = defaults and defaults.enabled and true or false
+  end
+  if HelloCursorDB then
+    HelloCursorDB.enabled = enabled
+  end
+  return enabled
+end
+
 -- Attach to HC.Util
 U.CopyDefaults          = CopyDefaults
 U.Clamp                 = Clamp
@@ -130,3 +172,5 @@ U.GetNormalizedColorHex = GetNormalizedColorHex
 U.NearestKey            = NearestKey
 U.SafeSetTexture        = SafeSetTexture
 U.GetSpellCooldownCompat = GetSpellCooldownCompat
+U.GetPlayerClassRGB     = GetPlayerClassRGB
+U.IsAddonEnabled        = IsAddonEnabled

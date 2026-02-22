@@ -17,19 +17,13 @@ HC.VERSION = VERSION
 local DEFAULTS = {
   enabled = true,
   colorHex = "FF4FD8",
-  useClassColor = false,
-  size = 80,
+  colorMode = "default",
   showWorld = true,
   showHousing = false,
   showPvE = true,
   showPvP = true,
   showInCombat = true,
   hideInMenus = true,
-  -- Mouselook behaviour while holding RMB
-  -- "none"        = no special behaviour
-  -- "show"        = force ring visible while mouselooking
-  -- "shrink"      = shrink ring while mouselooking
-  -- "show_shrink" = force visible + shrink while mouselooking
   mouselookMode = "show_shrink",
   showGCDSpinner = true,
   classicRingStyle = false,
@@ -52,6 +46,51 @@ local function SyncRingStyleFlags()
   -- Keep Settings-backed vars in sync if they exist:
   HelloCursorDB["HelloCursor_classicRingStyle"] = HelloCursorDB.classicRingStyle
   HelloCursorDB["HelloCursor_useNeonRing"] = HelloCursorDB.useNeonRing
+end
+
+-- ---------------------------------------------------------------------
+-- Colour mode migration (replaces useClassColor boolean)
+-- ---------------------------------------------------------------------
+
+local function SyncColorModeFromLegacy()
+  local nsMode = HelloCursorDB["HelloCursor_colorMode"]
+  local mode = HelloCursorDB.colorMode
+
+  -- Read legacy boolean (old checkbox) if present
+  local legacy = HelloCursorDB.useClassColor
+  local legacyNS = HelloCursorDB["HelloCursor_useClassColor"]
+  if legacy == nil and type(legacyNS) == "boolean" then
+    legacy = legacyNS
+  end
+
+  -- Prefer the Settings-backed value if it's valid
+  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class") then
+    mode = nsMode
+  end
+
+  -- If still invalid, migrate from legacy boolean
+  if mode ~= "default" and mode ~= "class" then
+    mode = legacy and "class" or "default"
+  end
+
+  -- Repair older saves where class colour was enabled but
+  -- colorMode was incorrectly left at "default".
+  if mode == "default" and legacy == true then
+    mode = "class"
+  end
+
+  -- Final clamp
+  if mode ~= "default" and mode ~= "class" then
+    mode = "default"
+  end
+
+  HelloCursorDB.colorMode = mode
+  HelloCursorDB["HelloCursor_colorMode"] = mode
+
+  -- Keep legacy boolean mirrored (for backwards compat and Settings UI)
+  local isClass = (mode == "class")
+  HelloCursorDB.useClassColor = isClass
+  HelloCursorDB["HelloCursor_useClassColor"] = isClass
 end
 
 -- ---------------------------------------------------------------------
@@ -137,8 +176,13 @@ local function IsMouselookShrinkEnabled()
       or HelloCursorDB.mouselookMode == "show_shrink"
 end
 
--- Seed / migrate mouselook mode once on load.
+-- Seed / migrate mouselook mode once on load. This only relies on
+-- HelloCursorDB's own fields and does not need to wait for events.
 SyncMouselookModeFromLegacy()
+
+-- Note: full migration of settings that depend on SavedVariables
+-- (colour mode, etc.) is performed in Core/Events on ADDON_LOADED,
+-- after HelloCursorDB has been populated by the client.
 
 -- ---------------------------------------------------------------------
 -- Small utils
@@ -257,19 +301,6 @@ local function IsAllowedInZone()
   return HelloCursorDB.showPvE
 end
 
-local function IsAddonEnabled()
-  local nsKey = "HelloCursor_enabled"
-  local enabled = HelloCursorDB.enabled
-  if type(HelloCursorDB[nsKey]) == "boolean" then
-    enabled = HelloCursorDB[nsKey]
-  end
-  if enabled == nil then
-    enabled = DEFAULTS.enabled and true or false
-  end
-  HelloCursorDB.enabled = enabled
-  return enabled
-end
-
 -- Temporary override: allow ring to show while using the colour picker
 local forceShowWhilePickingColour = false
 
@@ -278,7 +309,7 @@ local function SetForceShowWhilePickingColour(flag)
 end
 
 local function ShouldShowRing()
-  if not IsAddonEnabled() then
+  if not (HC.Util and HC.Util.IsAddonEnabled and HC.Util.IsAddonEnabled()) then
     return false
   end
 
@@ -439,37 +470,11 @@ end
 -- Colour (class colour or hex)
 -- ---------------------------------------------------------------------
 
-local function GetPlayerClassRGB()
-  local _, classFile = UnitClass("player")
-  classFile = classFile or "PRIEST"
-
-  if C_ClassColor and C_ClassColor.GetClassColor then
-    local c = C_ClassColor.GetClassColor(classFile)
-    if c and c.GetRGB then
-      return c:GetRGB()
-    elseif c and c.r then
-      return c.r, c.g, c.b
-    end
-  end
-
-  if RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile] then
-    local c = RAID_CLASS_COLORS[classFile]
-    return c.r, c.g, c.b
-  end
-
-  if GetClassColor then
-    local r, g, b = GetClassColor(classFile)
-    return r, g, b
-  end
-
-  return 1, 1, 1
-end
-
 local lastTintKey = nil
 
 local function ComputeTint()
-  if HelloCursorDB.useClassColor then
-    local r, g, b = GetPlayerClassRGB()
+  if HelloCursorDB.colorMode == "class" then
+    local r, g, b = HC.Util.GetPlayerClassRGB()
     return r, g, b, 1, ("class:%0.4f:%0.4f:%0.4f"):format(r, g, b)
   end
 
@@ -1009,7 +1014,7 @@ end
 
 visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
   -- If the addon is off, do nothing.
-  if not IsAddonEnabled() then
+  if not (HC.Util and HC.Util.IsAddonEnabled and HC.Util.IsAddonEnabled()) then
     if lastShouldShow ~= false then
       lastShouldShow = false
       if ringFrame:IsShown() then ringFrame:Hide() end
@@ -1151,5 +1156,6 @@ HC.CaptureCursorNow = CaptureCursorNow
 HC.RefreshVisualsImmediate = RefreshVisualsImmediate
 HC.UpdateVisibility = UpdateVisibility
 HC.ApplyTintIfNeeded = ApplyTintIfNeeded
-HC.IsAddonEnabled = IsAddonEnabled
+HC.IsAddonEnabled = HC.Util and HC.Util.IsAddonEnabled or nil
 HC.SyncRingStyleFlags = SyncRingStyleFlags
+HC.SyncColorModeFromLegacy = SyncColorModeFromLegacy
