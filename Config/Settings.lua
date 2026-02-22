@@ -657,7 +657,7 @@ local function CreateSettingsPanel()
 
   local function AddInstanceModeDropdown()
     local key = "instanceHideMode"
-    local name = "Do Not Show inside Instances"
+    local name = "Do Not Show Inside Instances"
     local tooltip =
       "Controls where the Cursor Ring is hidden in instanced content.\n" ..
       "None: Show in all instances.\n" ..
