@@ -565,7 +565,7 @@ local function CreateSettingsPanel()
   local function AddSizeDropdown()
     local key = "size"
     local name = "Size"
-    local tooltip = "Adjust the size of the Cursor Ring."
+    local tooltip = "Adjust the size of the cursor ring."
 
     local defaultValue = DEFAULTS[key] or 96
     local current = tonumber(HelloCursorDB[key]) or defaultValue
@@ -598,7 +598,7 @@ local function CreateSettingsPanel()
   local function AddStyleDropdown()
     local key = "classicRingStyle"
     local name = "Style"
-    local tooltip = "Choose the visual style of the Cursor Ring."
+    local tooltip = "Choose the cursor ring style."
 
     local defaultValue = DEFAULTS[key] and true or false
 
@@ -622,12 +622,7 @@ local function CreateSettingsPanel()
   local function AddInstanceModeDropdown()
     local key = "instanceHideMode"
     local name = "Do Not Show Inside Instances"
-    local tooltip =
-      "Controls where the Cursor Ring is hidden in instanced content.\n" ..
-      "None: Show in all instances.\n" ..
-      "PvE Instances: Hide in dungeons, delves, and raids.\n" ..
-      "PvP Instances: Hide in battlegrounds and arenas.\n" ..
-      "All Instances: Hide in all instanced content."
+    local tooltip = "Choose which types of instances hide the cursor ring."
 
     local defaultValue = DeriveInstanceHideModeFromFlags(
       DEFAULTS.doNotShowPvE,
@@ -682,7 +677,7 @@ local function CreateSettingsPanel()
   local function AddMouselookModeDropdown()
     local key = "mouselookMode"
     local name = "Mouselook Behaviour (RMB)"
-    local tooltip = "Controls how the Cursor Ring behaves while holding the right mouse button to turn the camera."
+    local tooltip = "Change how the cursor ring behaves while mouselooking."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -713,11 +708,7 @@ local function CreateSettingsPanel()
   local function AddColorModeDropdown()
     local key = "colorMode"
     local name = "Color"
-    local tooltip =
-      "Controls the ring's base colour.\n" ..
-      "Default: Use your configured ring colour.\n" ..
-      "Class: Use your class colour.\n" ..
-      "Target: Change colour based on your current target."
+    local tooltip = "Choose how the ring is coloured. The Default colour is set in Advanced."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
@@ -747,11 +738,7 @@ local function CreateSettingsPanel()
   local function AddAggroModeDropdown()
     local key = "aggroMode"
     local name = "Aggro Display"
-    local tooltip =
-      "Controls additional highlighting based on your target.\n" ..
-      "None: Use only your chosen colour.\n" ..
-      "Hostile: Turn the ring red when your target is hostile or in combat with you.\n" ..
-      "Threat: Turn the ring red when your target has threat on you."
+    local tooltip = "Highlight the ring when your target is hostile or you have threat."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -788,7 +775,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "enabled",
     "Enable Hello Cursor",
-    "Turns Hello Cursor on or off."
+    "Enable or disable Hello Cursor."
   )
 
   AddHeader("Display")
@@ -796,19 +783,19 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "alwaysShow",
     "Always Show Cursor Ring",
-    "Always show the Cursor Ring in all locations except those you explicitly disable below."
+    "Show the cursor ring unless it is hidden by the options below."
   )
 
   AddCheckbox(
     "showInCombat",
     "Always Show in Combat",
-    "Forces the cursor ring to show during combat. Overrides \"Do Not Show\" options. Ignored when \"Always Show\" is enabled."
+    "Show the cursor ring while you are in combat."
   )
 
   AddCheckbox(
     "doNotShowWorld",
     "Do Not Show Outside Instances",
-    "Do not show the Cursor Ring outside dungeons, raids, battlegrounds, and arenas."
+    "Hide the cursor ring outside dungeons, raids, and PvP instances."
   )
 
   AddInstanceModeDropdown()
@@ -816,28 +803,29 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "doNotShowHousing",
     "Do Not Show in Player Housing",
-    "Do not show the Cursor Ring while inside player housing (houses and neighbourhoods)."
+    "Hide the cursor ring while in player housing."
   )
 
   AddCheckbox(
     "hideInMenus",
     "Do Not Show in Menus",
-    "Do not show the Cursor Ring while menus (Esc, Settings, Options) are open."
+    "Hide the cursor ring while menus are open."
   )
 
   AddMouselookModeDropdown()
 
   AddCheckbox(
     "showGCDSpinner",
-    "Global Cooldown Animation",
-    "Show an animation on the ring that tracks the global cooldown."
+    "Global Cooldown",
+    "Display a global cooldown animation."
   )
-
-  AddSizeDropdown()
 
   AddStyleDropdown()
 
+  AddSizeDropdown()
+
   AddColorModeDropdown()
+
   AddAggroModeDropdown()
 
   -- Advanced canvas-style subcategory (color hex + utilities, legacy layout)
