@@ -66,12 +66,12 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Prefer the Settings-backed value if it's valid
-  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "reaction") then
+  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "target") then
     mode = nsMode
   end
 
   -- If still invalid, migrate from legacy boolean
-  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "target" then
     mode = legacy and "class" or "default"
   end
 
@@ -82,7 +82,7 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Final clamp
-  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "target" then
     mode = "default"
   end
 
@@ -643,7 +643,7 @@ local function SetStyleVisibility()
 end
 
 -- ---------------------------------------------------------------------
--- Color (class / reaction / hex)
+-- Color (class / target / hex)
 -- ---------------------------------------------------------------------
 
 local lastTintKey = nil
@@ -731,7 +731,7 @@ local function ComputeTint()
     baseA = 1
     baseKey = ("class:%0.4f:%0.4f:%0.4f"):format(baseR, baseG, baseB)
 
-  elseif HelloCursorDB.colorMode == "reaction" then
+  elseif HelloCursorDB.colorMode == "target" then
     local r, g, b, a, key = ComputeReactionTint()
     if r and g and b then
       baseR, baseG, baseB, baseA, baseKey = r, g, b, a, key

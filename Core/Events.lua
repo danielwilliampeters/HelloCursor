@@ -70,7 +70,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
   -- avoid kicking the full visibility pipeline unless necessary.
   if event == "PLAYER_TARGET_CHANGED" then
     if HelloCursorDB and (
-      HelloCursorDB.colorMode == "reaction" or
+      HelloCursorDB.colorMode == "target" or
       HelloCursorDB.aggroMode == "hostile" or
       HelloCursorDB.aggroMode == "threat"
     ) then

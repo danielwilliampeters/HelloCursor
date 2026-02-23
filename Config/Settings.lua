@@ -360,7 +360,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local hint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
-  hint:SetText("Use RRGGBB (example: FF4FD8). Class/Reaction color modes disable picker & hex.")
+  hint:SetText("Use RRGGBB (example: FF4FD8). Class/Target color modes disable picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
   -- Advanced utility: reset hex to the default ring color
@@ -716,11 +716,12 @@ local function CreateSettingsPanel()
     local tooltip =
       "Controls the ring's base colour.\n" ..
       "Default: Use your configured ring colour.\n" ..
-      "Class: Use your class colour."
+      "Class: Use your class colour.\n" ..
+      "Target: Change colour based on your current target."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
-    if current ~= "default" and current ~= "class" and current ~= "reaction" then
+    if current ~= "default" and current ~= "class" and current ~= "target" then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -733,7 +734,7 @@ local function CreateSettingsPanel()
         local container = Settings.CreateControlTextContainer()
         container:Add("default", "Default")
         container:Add("class", "Class Color")
-        -- container:Add("reaction", "Target Type")
+        container:Add("target", "Target")
         return container:GetData()
       end
 

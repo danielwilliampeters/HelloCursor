@@ -7,7 +7,7 @@ Designed for Retail with performance, polish, and configurability in mind.
 ## Features
 
 - **Highly visible cursor ring**: Adds a hollow ring around your cursor so it never gets lost in combat
-- **Color modes**: Choose a fixed color or use your class color
+- **Color modes**: Choose a fixed color, use your class color, or automatically match your current target's faction reaction
 - **Reactive cursor mode**: Smoothly shrinks the ring while holding right mouse (mouselook), enabled by default (can be turned off)
 - **Freeze on mouselook**: Ring stays at the last cursor position when camera movement begins
 - **Zone-aware visibility**: Control visibility for the open world, player housing, and instanced content via a simple instances dropdown (None / PvE / PvP / All)
@@ -27,10 +27,11 @@ Designed for Retail with performance, polish, and configurability in mind.
 - Under **Ring Color**, choose between:
   - **Default** – your configured ring color (via color picker or hex)
   - **Class** – your class color
+  - **Target** – use your current target's faction reaction color (hostile/neutral/friendly)
 - Under **Aggro Display**, choose between:
-  - **Off** – no extra aggro-based highlighting
-  - **Combat Highlight** – red when your target is hostile or engaged with you (has threat and is attackable/alive)
-  - **Threat** – red whenever your current, attackable, live target has threat on you
+  - **None** – no extra aggro-based highlighting
+  - **Hostile** – red when your target is hostile or otherwise treated as hostile/engaged (attackable, alive, and either red reaction or has threat on you)
+  - **Threat** – red whenever your current, attackable, live target has non-zero threat on you
 - Select ring size, and switch between classic and neon ring styles.
 
 ## Installation
