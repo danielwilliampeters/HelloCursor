@@ -66,12 +66,12 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Prefer the Settings-backed value if it's valid
-  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "reaction" or nsMode == "hostile") then
+  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "reaction" or nsMode == "hostile" or nsMode == "threat") then
     mode = nsMode
   end
 
   -- If still invalid, migrate from legacy boolean
-  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" and mode ~= "hostile" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" and mode ~= "hostile" and mode ~= "threat" then
     mode = legacy and "class" or "default"
   end
 
@@ -82,7 +82,7 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Final clamp
-  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" and mode ~= "hostile" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" and mode ~= "hostile" and mode ~= "threat" then
     mode = "default"
   end
 
@@ -619,12 +619,11 @@ local function ComputeReactionTint()
 
   return c.r, c.g, c.b, 1, ("reaction:%d"):format(reaction)
 end
-
-local function ComputeHostileTint()
-  if not (UnitExists and UnitReaction) then return nil end
+local function GetThreatLevelForTint()
+  if not (UnitExists and UnitThreatSituation) then return nil end
   if not UnitExists("target") then return nil end
 
-   -- Never treat non-attackable or dead targets as hostile for tinting.
+  -- Only care about live, attackable targets for threat-based tint.
   if UnitCanAttack and not UnitCanAttack("player", "target") then
     return nil
   end
@@ -632,31 +631,68 @@ local function ComputeHostileTint()
     return nil
   end
 
-  local reaction = UnitReaction("target", "player")
-  local threatLevel = nil
-
-  if UnitThreatSituation then
-    -- Threat of the player on the current target; non-nil and >0 means
-    -- the target is actively in combat with you / has threat on you.
-    threatLevel = UnitThreatSituation("player", "target")
+  local threatLevel = UnitThreatSituation("player", "target")
+  if not threatLevel or threatLevel <= 0 then
+    return nil
   end
 
+  return threatLevel
+end
+
+local function ComputeHostileTint()
+  if not (UnitExists and UnitReaction) then return nil end
+  if not UnitExists("target") then return nil end
+
+  -- Hostile mode should only ever apply to live, attackable targets.
+  if UnitCanAttack and not UnitCanAttack("player", "target") then
+    return nil
+  end
+  if UnitIsDeadOrGhost and UnitIsDeadOrGhost("target") then
+    return nil
+  end
+
+  local reaction = UnitReaction("player", "target")
   local isReactionHostile = reaction and reaction <= 3
+
+  local threatLevel = GetThreatLevelForTint()
   local hasThreatOnYou = threatLevel and threatLevel > 0
 
   if isReactionHostile or hasThreatOnYou then
     local reactionKey = reaction or 0
     local threatKey = threatLevel or 0
-    return 1, 0, 0, 1, ("hostile:%d:%d"):format(reactionKey, threatKey)
+
+    -- Custom Combat Highlight color: BA242B
+    local r, g, b = 0.7294, 0.1412, 0.1686
+    return r, g, b, 1, ("hostile:%d:%d"):format(reactionKey, threatKey)
   end
 
   return nil
+end
+
+local function ComputeThreatTint()
+  local threatLevel = GetThreatLevelForTint()
+  if not threatLevel then
+    return nil
+  end
+
+  -- Reuse the Combat Highlight color so hostile and threat
+  -- driven highlights look consistent.
+  local r, g, b = 0.7294, 0.1412, 0.1686
+  return r, g, b, 1, ("threat:%d"):format(threatLevel)
 end
 
 local function ComputeTint()
   if HelloCursorDB.colorMode == "class" then
     local r, g, b = HC.Util.GetPlayerClassRGB()
     return r, g, b, 1, ("class:%0.4f:%0.4f:%0.4f"):format(r, g, b)
+  end
+
+  if HelloCursorDB.colorMode == "threat" then
+    local r, g, b, a, key = ComputeThreatTint()
+    if r and g and b then
+      return r, g, b, a, key
+    end
+    -- fall through to default hex if no threat on target
   end
 
   if HelloCursorDB.colorMode == "hostile" then
