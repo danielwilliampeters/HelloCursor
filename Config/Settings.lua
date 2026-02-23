@@ -750,13 +750,15 @@ local function CreateSettingsPanel()
     local key = "colorMode"
     local name = "Ring Color"
     local tooltip =
-      "Default uses your configured color (Advanced).\n" ..
-      "Class color uses class specific colors.\n" ..
-      "Reaction color uses target reaction (friendly/neutral/hostile)."
+      "Controls how the ring colour is determined.\n\n" ..
+      "Default uses your configured ring colour.\n" ..
+      "Class uses your class colour.\n" ..
+      "Target Type changes color based on your target (friendly, neutral, or hostile).\n" ..
+      "Combat Highlight turns the ring red when your target is hostile or engaged with you."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
-    if current ~= "default" and current ~= "class" and current ~= "reaction" then
+    if current ~= "default" and current ~= "class" and current ~= "reaction" and current ~= "hostile" then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -768,8 +770,9 @@ local function CreateSettingsPanel()
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
         container:Add("default", "Default")
-        container:Add("class", "Class Color")
-        container:Add("reaction", "Reaction Color")
+        container:Add("class", "Class")
+        container:Add("reaction", "Target Type")
+        container:Add("hostile", "Combat Highlight")
         return container:GetData()
       end
 

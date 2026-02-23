@@ -10,6 +10,7 @@ eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+eventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
@@ -63,7 +64,16 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
   -- For target changes we generally only need to refresh the tint, so
   -- avoid kicking the full visibility pipeline unless necessary.
   if event == "PLAYER_TARGET_CHANGED" then
-    if HelloCursorDB and HelloCursorDB.colorMode == "reaction" then
+    if HelloCursorDB and (HelloCursorDB.colorMode == "reaction" or HelloCursorDB.colorMode == "hostile") then
+      HC.ApplyTintIfNeeded(false)
+    end
+    return
+  end
+
+  -- When using hostile color mode, threat changes can affect whether
+  -- the ring should be red even if the target stays the same.
+  if event == "UNIT_THREAT_SITUATION_UPDATE" then
+    if HelloCursorDB and HelloCursorDB.colorMode == "hostile" and arg1 == "player" then
       HC.ApplyTintIfNeeded(false)
     end
     return
