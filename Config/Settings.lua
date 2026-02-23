@@ -52,9 +52,6 @@ local function ApplyMouselookModeToFlags(mode)
 
   HelloCursorDB.reactiveCursor = reactive
   HelloCursorDB.showWhileMouselooking = showML
-
-  HelloCursorDB["HelloCursor_reactiveCursor"] = reactive
-  HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
 end
 
 local function DeriveInstanceHideModeFromFlags(doNotShowPvE, doNotShowPvP)
@@ -88,9 +85,6 @@ local function ApplyInstanceHideModeToFlags(mode)
 
   HelloCursorDB.doNotShowPvE = doNotShowPvE
   HelloCursorDB.doNotShowPvP = doNotShowPvP
-
-  HelloCursorDB["HelloCursor_doNotShowPvE"] = doNotShowPvE
-  HelloCursorDB["HelloCursor_doNotShowPvP"] = doNotShowPvP
 end
 
 -- ---------------------------------------------------------------------
@@ -115,7 +109,7 @@ end
 
 local function RefreshColorUIEnabledState()
   local mode = HelloCursorDB and HelloCursorDB.colorMode or "default"
-  local enabled = (mode ~= "class")
+  local enabled = (mode == "default")
   if pickBtnRef then pickBtnRef:SetEnabled(enabled) end
   if hexEditBox then
     hexEditBox:SetEnabled(enabled)
@@ -136,14 +130,13 @@ local function SetColorHex(hex)
   if not norm then return end
 
   HelloCursorDB.colorHex = norm
-  HelloCursorDB["HelloCursor_colorHex"] = norm
 
   ApplyTintIfNeeded(true)
   if hexEditBox then hexEditBox:SetText(norm) end
 end
 
 local function OpenColorPicker()
-  if HelloCursorDB.colorMode == "class" then return end
+  if HelloCursorDB.colorMode ~= "default" then return end
 
   local picker = GetPickerWidget()
   if not picker then
@@ -228,33 +221,6 @@ local function ResetToDefaults()
 
   -- Ensure style flags are consistent (classic vs neon + legacy useNeonRing)
   SyncRingStyleFlags()
-
-  -- Keep Settings-backed (namespaced) variables in sync so the Blizzard
-  -- Settings controls match defaults on reload.
-  local tracked = {
-    "enabled",
-    "alwaysShow",
-    "showInCombat",
-    "hideInMenus",
-    "doNotShowWorld",
-    "doNotShowHousing",
-    "doNotShowPvE",
-    "doNotShowPvP",
-    "instanceHideMode",
-    "mouselookMode",
-    "showGCDSpinner",
-    "size",
-    "colorMode",
-    "colorHex",
-    "classicRingStyle",
-  }
-
-  for _, key in ipairs(tracked) do
-    local nsKey = "HelloCursor_" .. key
-    if HelloCursorDB[key] ~= nil then
-      HelloCursorDB[nsKey] = HelloCursorDB[key]
-    end
-  end
 
   RefreshVisualsImmediate()
   UpdateVisibility()
@@ -372,7 +338,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
   end)
 
   hexEditBox:SetScript("OnEnterPressed", function(self)
-    if HelloCursorDB.colorMode == "class" then
+    if HelloCursorDB.colorMode ~= "default" then
       self:ClearFocus()
       return
     end
@@ -394,7 +360,7 @@ local function CreateSettingsPanelLegacy(parentCategory, isAdvanced)
 
   local hint = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
   hint:SetPoint("TOPLEFT", pickBtnRef, "BOTTOMLEFT", 0, -6)
-  hint:SetText("Use RRGGBB (example: FF4FD8). Class color mode disables picker & hex.")
+  hint:SetText("Use RRGGBB (example: FF4FD8). Class/Target color modes disable picker & hex.")
   hint:SetTextColor(0.75, 0.75, 0.75)
 
   -- Advanced utility: reset hex to the default ring color
@@ -465,18 +431,19 @@ local function CreateSettingsPanel()
 
     -- Seed the underlying storage from our existing DB field so the
     -- Settings panel reflects current values instead of always defaulting.
-    if HelloCursorDB[varName] == nil then
-      if HelloCursorDB[key] ~= nil then
-        HelloCursorDB[varName] = HelloCursorDB[key]
+    if HelloCursorDB[key] == nil then
+      local legacyNS = HelloCursorDB[varName]
+      if legacyNS ~= nil then
+        HelloCursorDB[key] = legacyNS
       else
-        HelloCursorDB[varName] = defaultValue
+        HelloCursorDB[key] = defaultValue
       end
     end
 
     local ok, setting = pcall(Settings.RegisterAddOnSetting,
       category,
       varName,     -- variable (must be globally unique)
-      varName,     -- variableKey
+      key,         -- variableKey within HelloCursorDB
       HelloCursorDB,
       VarTypeFor(defaultValue),
       name,
@@ -501,8 +468,7 @@ local function CreateSettingsPanel()
 
       local value = setting:GetValue()
 
-      -- keep both in sync
-      HelloCursorDB[varName] = value
+      -- store only the canonical key in SavedVariables
       HelloCursorDB[key] = value
 
       if key == "size" then
@@ -512,7 +478,6 @@ local function CreateSettingsPanel()
         end
 
         HelloCursorDB.size = v
-        HelloCursorDB[varName] = v
 
         RefreshSize()
         UpdateRingPosition()
@@ -521,7 +486,6 @@ local function CreateSettingsPanel()
         if key == "colorMode" then
           local isClass = (HelloCursorDB.colorMode == "class") and true or false
           HelloCursorDB.useClassColor = isClass
-          HelloCursorDB["HelloCursor_useClassColor"] = isClass
         end
 
         ApplyTintIfNeeded(true)
@@ -600,7 +564,7 @@ local function CreateSettingsPanel()
 
   local function AddSizeDropdown()
     local key = "size"
-    local name = "Cursor Ring Size"
+    local name = "Size"
     local tooltip = "Adjust the size of the Cursor Ring."
 
     local defaultValue = DEFAULTS[key] or 96
@@ -633,7 +597,7 @@ local function CreateSettingsPanel()
 
   local function AddStyleDropdown()
     local key = "classicRingStyle"
-    local name = "Cursor Ring Appearance"
+    local name = "Style"
     local tooltip = "Choose the visual style of the Cursor Ring."
 
     local defaultValue = DEFAULTS[key] and true or false
@@ -748,14 +712,16 @@ local function CreateSettingsPanel()
 
   local function AddColorModeDropdown()
     local key = "colorMode"
-    local name = "Ring Color"
+    local name = "Color"
     local tooltip =
-      "Default uses your configured color (Advanced).\n" ..
-      "Class color uses class specific colors."
+      "Controls the ring's base colour.\n" ..
+      "Default: Use your configured ring colour.\n" ..
+      "Class: Use your class colour.\n" ..
+      "Target: Change colour based on your current target."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
-    if current ~= "default" and current ~= "class" then
+    if current ~= "default" and current ~= "class" and current ~= "target" then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -768,6 +734,41 @@ local function CreateSettingsPanel()
         local container = Settings.CreateControlTextContainer()
         container:Add("default", "Default")
         container:Add("class", "Class Color")
+        container:Add("target", "Target")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
+  local function AddAggroModeDropdown()
+    local key = "aggroMode"
+    local name = "Aggro Display"
+    local tooltip =
+      "Controls additional highlighting based on your target.\n" ..
+      "None: Use only your chosen colour.\n" ..
+      "Hostile: Turn the ring red when your target is hostile or in combat with you.\n" ..
+      "Threat: Turn the ring red when your target has threat on you."
+
+    local defaultValue = DEFAULTS[key] or "none"
+    local current = HelloCursorDB[key]
+    if current ~= "none" and current ~= "hostile" and current ~= "threat" then
+      current = defaultValue
+    end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("none", "None")
+        container:Add("hostile", "Hostile")
+        container:Add("threat", "Threat")
         return container:GetData()
       end
 
@@ -837,6 +838,7 @@ local function CreateSettingsPanel()
   AddStyleDropdown()
 
   AddColorModeDropdown()
+  AddAggroModeDropdown()
 
   -- Advanced canvas-style subcategory (color hex + utilities, legacy layout)
   CreateSettingsPanelLegacy(category, true)

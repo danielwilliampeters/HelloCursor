@@ -18,6 +18,7 @@ local DEFAULTS = {
   enabled = true,
   colorHex = "FF4FD8",
   colorMode = "default",
+  aggroMode = "none",
   showInCombat = true,
   hideInMenus = true,
   alwaysShow = true,
@@ -44,10 +45,9 @@ local function SyncRingStyleFlags()
     end
   end
   HelloCursorDB.classicRingStyle = HelloCursorDB.classicRingStyle and true or false
-  HelloCursorDB.useNeonRing = not HelloCursorDB.classicRingStyle
-  -- Keep Settings-backed vars in sync if they exist:
-  HelloCursorDB["HelloCursor_classicRingStyle"] = HelloCursorDB.classicRingStyle
-  HelloCursorDB["HelloCursor_useNeonRing"] = HelloCursorDB.useNeonRing
+  -- Classic ring style is now stored only on the canonical field;
+  -- all HelloCursor_* namespaced variants are treated as legacy and
+  -- removed by CleanupLegacySavedVariables.
 end
 
 -- ---------------------------------------------------------------------
@@ -66,12 +66,12 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Prefer the Settings-backed value if it's valid
-  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class") then
+  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "target") then
     mode = nsMode
   end
 
   -- If still invalid, migrate from legacy boolean
-  if mode ~= "default" and mode ~= "class" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "target" then
     mode = legacy and "class" or "default"
   end
 
@@ -82,17 +82,58 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Final clamp
-  if mode ~= "default" and mode ~= "class" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "target" then
     mode = "default"
   end
 
   HelloCursorDB.colorMode = mode
-  HelloCursorDB["HelloCursor_colorMode"] = mode
 
-  -- Keep legacy boolean mirrored (for backwards compat and Settings UI)
+  -- Keep legacy boolean mirrored on the canonical field only (for
+  -- backwards compat and any external readers that still look at
+  -- useClassColor). Namespaced variants are treated as legacy input
+  -- and cleared by CleanupLegacySavedVariables.
   local isClass = (mode == "class")
   HelloCursorDB.useClassColor = isClass
-  HelloCursorDB["HelloCursor_useClassColor"] = isClass
+end
+
+-- ---------------------------------------------------------------------
+-- SavedVariables cleanup (remove legacy-only fields after migration)
+-- ---------------------------------------------------------------------
+
+local function CleanupLegacySavedVariables()
+  if not HelloCursorDB or type(HelloCursorDB) ~= "table" then return end
+
+  local db = HelloCursorDB
+
+  -- Legacy neon style toggle (replaced by classicRingStyle)
+  db.useNeonRing = nil
+  db["HelloCursor_useNeonRing"] = nil
+
+  -- Legacy positive visibility flags (replaced by doNotShow* and instanceHideMode)
+  db.showWorld = nil
+  db.showHousing = nil
+  db.showPvE = nil
+  db.showPvP = nil
+
+  db["HelloCursor_showWorld"] = nil
+  db["HelloCursor_showHousing"] = nil
+  db["HelloCursor_showPvE"] = nil
+  db["HelloCursor_showPvP"] = nil
+
+  -- Finally, clear any remaining namespaced HelloCursor_* keys. At
+  -- this point all migrations (including SyncMouselookModeFromLegacy,
+  -- SyncVisibilityFlagsFromLegacy, SyncColorModeFromLegacy, etc.) have
+  -- already copied their effective values into canonical fields, so
+  -- the namespaced copies are redundant.
+  local toClear = {}
+  for k, _ in pairs(db) do
+    if type(k) == "string" and k:match("^HelloCursor_") then
+      toClear[#toClear + 1] = k
+    end
+  end
+  for _, k in ipairs(toClear) do
+    db[k] = nil
+  end
 end
 
 -- ---------------------------------------------------------------------
@@ -109,21 +150,39 @@ local function SyncVisibilityFlagsFromLegacy()
   end
 
   -- Menus: keep existing semantics (hideInMenus = true means "do not show in menus").
+  -- Prefer any legacy namespaced value if the canonical key is nil.
+  local function MergeBoolFromNamespaced(key)
+    if db[key] == nil then
+      local ns = db["HelloCursor_" .. key]
+      if type(ns) == "boolean" then
+        db[key] = ns and true or false
+      end
+    end
+  end
+
+  MergeBoolFromNamespaced("hideInMenus")
   if db.hideInMenus == nil then
     db.hideInMenus = DEFAULTS.hideInMenus and true or false
   else
     db.hideInMenus = db.hideInMenus and true or false
   end
-  db["HelloCursor_hideInMenus"] = db.hideInMenus
 
   -- Always Show: treat as a new setting with its own default.
+  MergeBoolFromNamespaced("alwaysShow")
+
   if db.alwaysShow == nil then
     db.alwaysShow = DEFAULTS.alwaysShow and true or false
   else
     db.alwaysShow = db.alwaysShow and true or false
   end
 
-  db["HelloCursor_alwaysShow"] = db.alwaysShow
+  -- Migrate primary visibility toggles from any legacy namespaced
+  -- fields before deriving per-zone behaviour.
+  MergeBoolFromNamespaced("showInCombat")
+  MergeBoolFromNamespaced("doNotShowWorld")
+  MergeBoolFromNamespaced("doNotShowHousing")
+  MergeBoolFromNamespaced("doNotShowPvE")
+  MergeBoolFromNamespaced("doNotShowPvP")
 
   -- Legacy zone flags (positive semantics)
   local legacyShowWorld    = BoolOrNil(db.showWorld)
@@ -194,22 +253,9 @@ local function SyncVisibilityFlagsFromLegacy()
     db.doNotShowPvP = db.doNotShowPvP and true or false
   end
 
-  -- Keep namespaced versions in sync for Settings UI.
-  db["HelloCursor_doNotShowWorld"]   = db.doNotShowWorld
-  db["HelloCursor_doNotShowHousing"] = db.doNotShowHousing
-  db["HelloCursor_doNotShowPvE"]     = db.doNotShowPvE
-  db["HelloCursor_doNotShowPvP"]     = db.doNotShowPvP
-
-  -- Maintain legacy positive flags for backwards compatibility.
-  db.showWorld   = not db.doNotShowWorld
-  db.showHousing = not db.doNotShowHousing
-  db.showPvE     = not db.doNotShowPvE
-  db.showPvP     = not db.doNotShowPvP
-
-  db["HelloCursor_showWorld"]   = db.showWorld
-  db["HelloCursor_showHousing"] = db.showHousing
-  db["HelloCursor_showPvE"]     = db.showPvE
-  db["HelloCursor_showPvP"]     = db.showPvP
+  -- Do not recreate legacy positive flags (showWorld / HelloCursor_showWorld
+  -- etc). They are now fully deprecated and cleaned up by
+  -- CleanupLegacySavedVariables so they can disappear from SavedVariables.
 end
 
 -- ---------------------------------------------------------------------
@@ -271,7 +317,6 @@ local function SyncMouselookModeFromLegacy()
   mode = NormalizeMouselookMode(mode)
 
   HelloCursorDB.mouselookMode = mode
-  HelloCursorDB["HelloCursor_mouselookMode"] = mode
 
   -- Keep legacy booleans in sync for any external readers, but the
   -- addon logic itself derives behaviour from mouselookMode.
@@ -280,9 +325,6 @@ local function SyncMouselookModeFromLegacy()
 
   HelloCursorDB.reactiveCursor = reactive
   HelloCursorDB.showWhileMouselooking = showML
-
-  HelloCursorDB["HelloCursor_reactiveCursor"] = reactive
-  HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
 end
 
 local function IsMouselookShowEnabled()
@@ -308,6 +350,11 @@ local GetCursorPosition   = GetCursorPosition
 local IsMouselooking      = IsMouselooking
 local UnitAffectingCombat = UnitAffectingCombat
 local IsInInstance        = IsInInstance
+local UnitReaction        = UnitReaction
+local UnitExists          = UnitExists
+local UnitThreatSituation = UnitThreatSituation
+local UnitCanAttack       = UnitCanAttack
+local UnitIsDeadOrGhost   = UnitIsDeadOrGhost
 local math_abs            = math.abs
 
 local function IsMouselookActive()
@@ -356,7 +403,6 @@ local function GetNormalizedSize()
   local size = NearestSupportedSize(HelloCursorDB.size)
 
   HelloCursorDB.size = size
-  HelloCursorDB["HelloCursor_size"] = size
 
   return size
 end
@@ -576,11 +622,15 @@ end
 
 local function SetStyleVisibility()
   local neon = IsNeonStyle()
-  local showSmall = not forceShowWhilePickingColor
-
-  -- While using the color picker we completely disable the small
-  -- ring textures so only the default ring can ever be shown,
-  -- regardless of mix or any other visual state.
+  -- Only enable the small ring textures when the shrink behaviour is
+  -- available (i.e. shrink mode is enabled). Actual visibility of the
+  -- small ring is still fully driven by the mix/alpha crossfade; this
+  -- just avoids ever showing small textures when shrink is disabled.
+  --
+  -- While using the color picker we completely disable the small ring
+  -- textures so only the default ring can ever be shown, regardless of
+  -- mix or any other visual state.
+  local showSmall = (not forceShowWhilePickingColor) and IsMouselookShrinkEnabled()
   SetShownSafe(ringTexNormal, true)
   SetShownSafe(ringTexSmall,  showSmall)
 
@@ -593,19 +643,124 @@ local function SetStyleVisibility()
 end
 
 -- ---------------------------------------------------------------------
--- Color (class color or hex)
+-- Color (class / target / hex)
 -- ---------------------------------------------------------------------
 
 local lastTintKey = nil
 
-local function ComputeTint()
-  if HelloCursorDB.colorMode == "class" then
-    local r, g, b = HC.Util.GetPlayerClassRGB()
-    return r, g, b, 1, ("class:%0.4f:%0.4f:%0.4f"):format(r, g, b)
+local function ComputeReactionTint()
+  if not (UnitExists and UnitReaction and FACTION_BAR_COLORS) then return nil end
+  if not UnitExists("target") then return nil end
+
+  local reaction = UnitReaction("target", "player")
+  if not reaction then return nil end
+
+  local c = FACTION_BAR_COLORS[reaction]
+  if not c then return nil end
+
+  return c.r, c.g, c.b, 1, ("reaction:%d"):format(reaction)
+end
+local function GetThreatLevelForTint()
+  if not (UnitExists and UnitThreatSituation) then return nil end
+  if not UnitExists("target") then return nil end
+
+  -- Only care about live, attackable targets for threat-based tint.
+  if UnitCanAttack and not UnitCanAttack("player", "target") then
+    return nil
+  end
+  if UnitIsDeadOrGhost and UnitIsDeadOrGhost("target") then
+    return nil
   end
 
-  local r, g, b, a = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
-  return r, g, b, a, ("hex:%s"):format(GetNormalizedColorHex())
+  local threatLevel = UnitThreatSituation("player", "target")
+  if not threatLevel or threatLevel <= 0 then
+    return nil
+  end
+
+  return threatLevel
+end
+
+local function ComputeHostileTint()
+  if not (UnitExists and UnitReaction) then return nil end
+  if not UnitExists("target") then return nil end
+
+  -- Hostile mode should only ever apply to live, attackable targets.
+  if UnitCanAttack and not UnitCanAttack("player", "target") then
+    return nil
+  end
+  if UnitIsDeadOrGhost and UnitIsDeadOrGhost("target") then
+    return nil
+  end
+
+  local reaction = UnitReaction("player", "target")
+  local isReactionHostile = reaction and reaction <= 3
+
+  local threatLevel = GetThreatLevelForTint()
+  local hasThreatOnYou = threatLevel and threatLevel > 0
+
+  if isReactionHostile or hasThreatOnYou then
+    local reactionKey = reaction or 0
+    local threatKey = threatLevel or 0
+
+    -- Custom Combat Highlight color: BA242B
+    local r, g, b = 0.7294, 0.1412, 0.1686
+    return r, g, b, 1, ("hostile:%d:%d"):format(reactionKey, threatKey)
+  end
+
+  return nil
+end
+
+local function ComputeThreatTint()
+  local threatLevel = GetThreatLevelForTint()
+  if not threatLevel then
+    return nil
+  end
+
+  -- Reuse the Combat Highlight color so hostile and threat
+  -- driven highlights look consistent.
+  local r, g, b = 0.7294, 0.1412, 0.1686
+  return r, g, b, 1, ("threat:%d"):format(threatLevel)
+end
+
+local function ComputeTint()
+  -- Base colour from the primary colour mode
+  local baseR, baseG, baseB, baseA, baseKey
+
+  if HelloCursorDB.colorMode == "class" then
+    baseR, baseG, baseB = HC.Util.GetPlayerClassRGB()
+    baseA = 1
+    baseKey = ("class:%0.4f:%0.4f:%0.4f"):format(baseR, baseG, baseB)
+
+  elseif HelloCursorDB.colorMode == "target" then
+    local r, g, b, a, key = ComputeReactionTint()
+    if r and g and b then
+      baseR, baseG, baseB, baseA, baseKey = r, g, b, a, key
+    else
+      baseR, baseG, baseB, baseA = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
+      baseKey = ("hex:%s"):format(GetNormalizedColorHex())
+    end
+
+  else
+    baseR, baseG, baseB, baseA = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
+    baseKey = ("hex:%s"):format(GetNormalizedColorHex())
+  end
+
+  -- Optional aggro overlay (Combat Highlight / Threat)
+  local aggroMode = HelloCursorDB.aggroMode or DEFAULTS.aggroMode or "none"
+  if aggroMode == "threat" then
+    local r, g, b, a, key = ComputeThreatTint()
+    if r and g and b then
+      return r, g, b, a, key
+    end
+  elseif aggroMode == "hostile" then
+    local r, g, b, a, key = ComputeHostileTint()
+    if r and g and b then
+      return r, g, b, a, key
+    end
+  end
+
+  -- Fallback to the base colour when there is no aggro highlight
+  return baseR, baseG, baseB, baseA, baseKey
 end
 
 local function ApplyTintIfNeeded(force)
@@ -620,22 +775,34 @@ local function ApplyTintIfNeeded(force)
       gcdSpinnerSmall:SetSwipeColor(r, g, b, a or 1)
     end
     lastTintKey = key
+
+    -- Safety clamp: whenever shrink is not actively engaged, ensure
+    -- the small ring (and its neon overlays) are fully hidden so a
+    -- reaction color / tint update can never briefly reveal the
+    -- smaller base ring.
+    if not (WantsSmallRing and WantsSmallRing()) then
+      ringTexSmall:SetAlpha(0)
+      neonCoreSmall:SetAlpha(0)
+      neonInnerSmall:SetAlpha(0)
+      neonEdgeSmall:SetAlpha(0)
+    end
   end
 
   local neon = IsNeonStyle()
   if neon then
-    local tintA = a or 1
+    -- Keep the CORE and EDGE white; only tint RGB. Alpha for all
+    -- neon layers is driven exclusively via SetAlpha in SetMix so we
+    -- never accidentally "override" the configured neon opacity
+    -- when the tint changes (fixes brief fully-white flashes).
+    neonCoreNormal:SetVertexColor(1, 1, 1)
+    neonCoreSmall:SetVertexColor(1, 1, 1)
 
-    -- Keep the CORE white so it can actually look white
-    neonCoreNormal:SetVertexColor(1, 1, 1, tintA)
-    neonCoreSmall:SetVertexColor(1, 1, 1, tintA)
+    -- Tint the glow layers with your chosen color (RGB only)
+    neonInnerNormal:SetVertexColor(r, g, b)
+    neonInnerSmall:SetVertexColor(r, g, b)
 
-    -- Tint the glow layers with your chosen color
-    neonInnerNormal:SetVertexColor(r, g, b, tintA)
-    neonInnerSmall:SetVertexColor(r, g, b, tintA)
-
-    neonEdgeNormal:SetVertexColor(1, 1, 1, tintA)
-    neonEdgeSmall:SetVertexColor(1, 1, 1, tintA)
+    neonEdgeNormal:SetVertexColor(1, 1, 1)
+    neonEdgeSmall:SetVertexColor(1, 1, 1)
   end
 end
 
@@ -860,18 +1027,28 @@ SetMix = function(mix)
   end
 
   -- Normal crossfade (BASE ring always)
+  --
+  -- Only allow the "small" ring to become visible while the shrink
+  -- behaviour is actually active (WantsSmallRing). This prevents any
+  -- brief small-ring flash when shrink is enabled but you're not
+  -- intentionally mouselooking (e.g. when reaction color updates on
+  -- hard target / target clear).
+  local effectiveMix = mix
+  if not (WantsSmallRing and WantsSmallRing()) then
+    effectiveMix = 0
+  end
   local baseMul = 1
   if neon then baseMul = HC.TUNE.NEON_ALPHA_BASE end
 
-  if mix <= 0.0001 then
+  if effectiveMix <= 0.0001 then
     ringTexNormal:SetAlpha(1 * baseMul)
     ringTexSmall:SetAlpha(0)
-  elseif mix >= 0.9999 then
+  elseif effectiveMix >= 0.9999 then
     ringTexNormal:SetAlpha(0)
     ringTexSmall:SetAlpha(1 * baseMul)
   else
-    ringTexNormal:SetAlpha((1 - mix) * baseMul)
-    ringTexSmall:SetAlpha(mix * baseMul)
+    ringTexNormal:SetAlpha((1 - effectiveMix) * baseMul)
+    ringTexSmall:SetAlpha(effectiveMix * baseMul)
   end
 
   -- Neon overlays (only when neon style enabled)
@@ -899,21 +1076,21 @@ SetMix = function(mix)
       edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
     end
 
-    if mix <= 0.0001 then
+    if effectiveMix <= 0.0001 then
       neonCoreNormal:SetAlpha(coreBase);   neonCoreSmall:SetAlpha(0)
       neonInnerNormal:SetAlpha(innerBase); neonInnerSmall:SetAlpha(0)
       neonEdgeNormal:SetAlpha(edgeBase); neonEdgeSmall:SetAlpha(0)
-    elseif mix >= 0.9999 then
+    elseif effectiveMix >= 0.9999 then
       neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(coreBase)
       neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(innerBase)
       neonEdgeNormal:SetAlpha(0); neonEdgeSmall:SetAlpha(edgeBase)
     else
-      local aN = 1 - mix
-      local aS = mix
+      local aN = 1 - effectiveMix
+      local aS = effectiveMix
       neonCoreNormal:SetAlpha(aN * coreBase);   neonCoreSmall:SetAlpha(aS * coreBase)
       neonInnerNormal:SetAlpha(aN * innerBase); neonInnerSmall:SetAlpha(aS * innerBase)
-      neonEdgeNormal:SetAlpha((1 - mix) * edgeBase)
-      neonEdgeSmall:SetAlpha(mix * edgeBase)
+      neonEdgeNormal:SetAlpha(aN * edgeBase)
+      neonEdgeSmall:SetAlpha(aS * edgeBase)
     end
   else
     -- ensure overlays are invisible if neon is off
@@ -1278,3 +1455,4 @@ HC.IsAddonEnabled = HC.Util and HC.Util.IsAddonEnabled or nil
 HC.SyncRingStyleFlags = SyncRingStyleFlags
 HC.SyncColorModeFromLegacy = SyncColorModeFromLegacy
 HC.SyncVisibilityFlagsFromLegacy = SyncVisibilityFlagsFromLegacy
+HC.CleanupLegacySavedVariables = CleanupLegacySavedVariables

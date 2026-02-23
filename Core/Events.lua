@@ -9,6 +9,8 @@ eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
+eventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
@@ -33,7 +35,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     local size = tonumber(HelloCursorDB.size)
     if size == 192 then
       HelloCursorDB.size = 128
-      HelloCursorDB["HelloCursor_size"] = 128
     end
 
     if HC.SyncRingStyleFlags then
@@ -44,6 +45,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     -- so legacy useClassColor is correctly reflected in colorMode.
     if HC.SyncColorModeFromLegacy then
       HC.SyncColorModeFromLegacy()
+    end
+
+    -- After all migrations have run, clean up any legacy-only
+    -- SavedVariables that are no longer used.
+    if HC.CleanupLegacySavedVariables then
+      HC.CleanupLegacySavedVariables()
     end
 
     HC.CaptureCursorNow()
@@ -59,6 +66,31 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     return
   end
 
+  -- For target changes we generally only need to refresh the tint, so
+  -- avoid kicking the full visibility pipeline unless necessary.
+  if event == "PLAYER_TARGET_CHANGED" then
+    if HelloCursorDB and (
+      HelloCursorDB.colorMode == "target" or
+      HelloCursorDB.aggroMode == "hostile" or
+      HelloCursorDB.aggroMode == "threat"
+    ) then
+      HC.ApplyTintIfNeeded(false)
+    end
+    return
+  end
+
+  -- When using hostile or threat aggro display, threat changes can
+  -- affect whether the ring should be red even if the target stays
+  -- the same.
+  if event == "UNIT_THREAT_SITUATION_UPDATE" then
+    if HelloCursorDB
+      and (HelloCursorDB.aggroMode == "hostile" or HelloCursorDB.aggroMode == "threat")
+      and arg1 == "player" then
+      HC.ApplyTintIfNeeded(false)
+    end
+    return
+  end
+
   HC.ApplyTintIfNeeded(false)
   HC.UpdateVisibility()
 end)
@@ -68,11 +100,9 @@ SLASH_HELLOCURSOR2 = "/hellocursor"
 
 SlashCmdList.HELLOCURSOR = function(msg)
   if msg == "toggle" then
-    local nsKey = "HelloCursor_enabled"
     local current = HC.IsAddonEnabled()
     local newValue = not current
     HelloCursorDB.enabled = newValue
-    HelloCursorDB[nsKey] = newValue
     HC.UpdateVisibility()
     print(("HelloCursor: %s"):format(HelloCursorDB.enabled and "enabled" or "disabled"))
     return
