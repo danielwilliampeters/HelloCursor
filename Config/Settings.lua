@@ -600,7 +600,7 @@ local function CreateSettingsPanel()
 
   local function AddSizeDropdown()
     local key = "size"
-    local name = "Cursor Ring Size"
+    local name = "Size"
     local tooltip = "Adjust the size of the Cursor Ring."
 
     local defaultValue = DEFAULTS[key] or 96
@@ -633,7 +633,7 @@ local function CreateSettingsPanel()
 
   local function AddStyleDropdown()
     local key = "classicRingStyle"
-    local name = "Cursor Ring Appearance"
+    local name = "Style"
     local tooltip = "Choose the visual style of the Cursor Ring."
 
     local defaultValue = DEFAULTS[key] and true or false
@@ -748,18 +748,15 @@ local function CreateSettingsPanel()
 
   local function AddColorModeDropdown()
     local key = "colorMode"
-    local name = "Ring Color"
+    local name = "Color"
     local tooltip =
-      "Controls how the ring colour is determined.\n\n" ..
-      "Default uses your configured ring colour.\n" ..
-      "Class uses your class colour.\n" ..
-      -- "Target Type changes color based on your target (friendly, neutral, or hostile).\n" ..
-      "Combat Highlight turns the ring red when your target is hostile or engaged with you.\n" ..
-      "Threat turns the ring red when your target has threat on you."
+      "Controls the ring's base colour.\n" ..
+      "Default: Use your configured ring colour.\n" ..
+      "Class: Use your class colour."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
-    if current ~= "default" and current ~= "class" and current ~= "reaction" and current ~= "hostile" and current ~= "threat" then
+    if current ~= "default" and current ~= "class" and current ~= "reaction" then
       current = defaultValue
     end
     HelloCursorDB[key] = current
@@ -771,9 +768,41 @@ local function CreateSettingsPanel()
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
         container:Add("default", "Default")
-        container:Add("class", "Use Class Color")
+        container:Add("class", "Class Color")
         -- container:Add("reaction", "Target Type")
-        container:Add("hostile", "Combat Highlight")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
+  local function AddAggroModeDropdown()
+    local key = "aggroMode"
+    local name = "Aggro Display"
+    local tooltip =
+      "Controls additional highlighting based on your target.\n" ..
+      "Off: Use only your chosen colour.\n" ..
+      "Hostile: Turn the ring red when your target is hostile or in combat with you.\n" ..
+      "Threat: Turn the ring red when your target has threat on you."
+
+    local defaultValue = DEFAULTS[key] or "none"
+    local current = HelloCursorDB[key]
+    if current ~= "none" and current ~= "hostile" and current ~= "threat" then
+      current = defaultValue
+    end
+    HelloCursorDB[key] = current
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("none", "Off")
+        container:Add("hostile", "Hostile")
         container:Add("threat", "Threat")
         return container:GetData()
       end
@@ -844,6 +873,7 @@ local function CreateSettingsPanel()
   AddStyleDropdown()
 
   AddColorModeDropdown()
+  AddAggroModeDropdown()
 
   -- Advanced canvas-style subcategory (color hex + utilities, legacy layout)
   CreateSettingsPanelLegacy(category, true)

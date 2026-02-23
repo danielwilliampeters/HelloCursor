@@ -64,18 +64,22 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
   -- For target changes we generally only need to refresh the tint, so
   -- avoid kicking the full visibility pipeline unless necessary.
   if event == "PLAYER_TARGET_CHANGED" then
-    if HelloCursorDB and (HelloCursorDB.colorMode == "reaction" or HelloCursorDB.colorMode == "hostile" or HelloCursorDB.colorMode == "threat") then
+    if HelloCursorDB and (
+      HelloCursorDB.colorMode == "reaction" or
+      HelloCursorDB.aggroMode == "hostile" or
+      HelloCursorDB.aggroMode == "threat"
+    ) then
       HC.ApplyTintIfNeeded(false)
     end
     return
   end
 
-  -- When using hostile or threat color modes, threat changes can
+  -- When using hostile or threat aggro display, threat changes can
   -- affect whether the ring should be red even if the target stays
   -- the same.
   if event == "UNIT_THREAT_SITUATION_UPDATE" then
     if HelloCursorDB
-      and (HelloCursorDB.colorMode == "hostile" or HelloCursorDB.colorMode == "threat")
+      and (HelloCursorDB.aggroMode == "hostile" or HelloCursorDB.aggroMode == "threat")
       and arg1 == "player" then
       HC.ApplyTintIfNeeded(false)
     end

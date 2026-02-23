@@ -18,6 +18,7 @@ local DEFAULTS = {
   enabled = true,
   colorHex = "FF4FD8",
   colorMode = "default",
+  aggroMode = "none",
   showInCombat = true,
   hideInMenus = true,
   alwaysShow = true,
@@ -66,12 +67,12 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Prefer the Settings-backed value if it's valid
-  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "reaction" or nsMode == "hostile" or nsMode == "threat") then
+  if type(nsMode) == "string" and (nsMode == "default" or nsMode == "class" or nsMode == "reaction") then
     mode = nsMode
   end
 
   -- If still invalid, migrate from legacy boolean
-  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" and mode ~= "hostile" and mode ~= "threat" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" then
     mode = legacy and "class" or "default"
   end
 
@@ -82,7 +83,7 @@ local function SyncColorModeFromLegacy()
   end
 
   -- Final clamp
-  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" and mode ~= "hostile" and mode ~= "threat" then
+  if mode ~= "default" and mode ~= "class" and mode ~= "reaction" then
     mode = "default"
   end
 
@@ -682,37 +683,44 @@ local function ComputeThreatTint()
 end
 
 local function ComputeTint()
+  -- Base colour from the primary colour mode
+  local baseR, baseG, baseB, baseA, baseKey
+
   if HelloCursorDB.colorMode == "class" then
-    local r, g, b = HC.Util.GetPlayerClassRGB()
-    return r, g, b, 1, ("class:%0.4f:%0.4f:%0.4f"):format(r, g, b)
+    baseR, baseG, baseB = HC.Util.GetPlayerClassRGB()
+    baseA = 1
+    baseKey = ("class:%0.4f:%0.4f:%0.4f"):format(baseR, baseG, baseB)
+
+  elseif HelloCursorDB.colorMode == "reaction" then
+    local r, g, b, a, key = ComputeReactionTint()
+    if r and g and b then
+      baseR, baseG, baseB, baseA, baseKey = r, g, b, a, key
+    else
+      baseR, baseG, baseB, baseA = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
+      baseKey = ("hex:%s"):format(GetNormalizedColorHex())
+    end
+
+  else
+    baseR, baseG, baseB, baseA = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
+    baseKey = ("hex:%s"):format(GetNormalizedColorHex())
   end
 
-  if HelloCursorDB.colorMode == "threat" then
+  -- Optional aggro overlay (Combat Highlight / Threat)
+  local aggroMode = HelloCursorDB.aggroMode or DEFAULTS.aggroMode or "none"
+  if aggroMode == "threat" then
     local r, g, b, a, key = ComputeThreatTint()
     if r and g and b then
       return r, g, b, a, key
     end
-    -- fall through to default hex if no threat on target
-  end
-
-  if HelloCursorDB.colorMode == "hostile" then
+  elseif aggroMode == "hostile" then
     local r, g, b, a, key = ComputeHostileTint()
     if r and g and b then
       return r, g, b, a, key
     end
-    -- fall through to default hex if target is not hostile
   end
 
-  if HelloCursorDB.colorMode == "reaction" then
-    local r, g, b, a, key = ComputeReactionTint()
-    if r and g and b then
-      return r, g, b, a, key
-    end
-    -- fall through to default hex if reaction color is unavailable
-  end
-
-  local r, g, b, a = HC.Util.HexToRGBA(HelloCursorDB.colorHex)
-  return r, g, b, a, ("hex:%s"):format(GetNormalizedColorHex())
+  -- Fallback to the base colour when there is no aggro highlight
+  return baseR, baseG, baseB, baseA, baseKey
 end
 
 local function ApplyTintIfNeeded(force)
