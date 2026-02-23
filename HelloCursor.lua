@@ -45,10 +45,9 @@ local function SyncRingStyleFlags()
     end
   end
   HelloCursorDB.classicRingStyle = HelloCursorDB.classicRingStyle and true or false
-  HelloCursorDB.useNeonRing = not HelloCursorDB.classicRingStyle
-  -- Keep Settings-backed vars in sync if they exist:
-  HelloCursorDB["HelloCursor_classicRingStyle"] = HelloCursorDB.classicRingStyle
-  HelloCursorDB["HelloCursor_useNeonRing"] = HelloCursorDB.useNeonRing
+  -- Classic ring style is now stored only on the canonical field;
+  -- all HelloCursor_* namespaced variants are treated as legacy and
+  -- removed by CleanupLegacySavedVariables.
 end
 
 -- ---------------------------------------------------------------------
@@ -88,12 +87,53 @@ local function SyncColorModeFromLegacy()
   end
 
   HelloCursorDB.colorMode = mode
-  HelloCursorDB["HelloCursor_colorMode"] = mode
 
-  -- Keep legacy boolean mirrored (for backwards compat and Settings UI)
+  -- Keep legacy boolean mirrored on the canonical field only (for
+  -- backwards compat and any external readers that still look at
+  -- useClassColor). Namespaced variants are treated as legacy input
+  -- and cleared by CleanupLegacySavedVariables.
   local isClass = (mode == "class")
   HelloCursorDB.useClassColor = isClass
-  HelloCursorDB["HelloCursor_useClassColor"] = isClass
+end
+
+-- ---------------------------------------------------------------------
+-- SavedVariables cleanup (remove legacy-only fields after migration)
+-- ---------------------------------------------------------------------
+
+local function CleanupLegacySavedVariables()
+  if not HelloCursorDB or type(HelloCursorDB) ~= "table" then return end
+
+  local db = HelloCursorDB
+
+  -- Legacy neon style toggle (replaced by classicRingStyle)
+  db.useNeonRing = nil
+  db["HelloCursor_useNeonRing"] = nil
+
+  -- Legacy positive visibility flags (replaced by doNotShow* and instanceHideMode)
+  db.showWorld = nil
+  db.showHousing = nil
+  db.showPvE = nil
+  db.showPvP = nil
+
+  db["HelloCursor_showWorld"] = nil
+  db["HelloCursor_showHousing"] = nil
+  db["HelloCursor_showPvE"] = nil
+  db["HelloCursor_showPvP"] = nil
+
+  -- Finally, clear any remaining namespaced HelloCursor_* keys. At
+  -- this point all migrations (including SyncMouselookModeFromLegacy,
+  -- SyncVisibilityFlagsFromLegacy, SyncColorModeFromLegacy, etc.) have
+  -- already copied their effective values into canonical fields, so
+  -- the namespaced copies are redundant.
+  local toClear = {}
+  for k, _ in pairs(db) do
+    if type(k) == "string" and k:match("^HelloCursor_") then
+      toClear[#toClear + 1] = k
+    end
+  end
+  for _, k in ipairs(toClear) do
+    db[k] = nil
+  end
 end
 
 -- ---------------------------------------------------------------------
@@ -110,21 +150,39 @@ local function SyncVisibilityFlagsFromLegacy()
   end
 
   -- Menus: keep existing semantics (hideInMenus = true means "do not show in menus").
+  -- Prefer any legacy namespaced value if the canonical key is nil.
+  local function MergeBoolFromNamespaced(key)
+    if db[key] == nil then
+      local ns = db["HelloCursor_" .. key]
+      if type(ns) == "boolean" then
+        db[key] = ns and true or false
+      end
+    end
+  end
+
+  MergeBoolFromNamespaced("hideInMenus")
   if db.hideInMenus == nil then
     db.hideInMenus = DEFAULTS.hideInMenus and true or false
   else
     db.hideInMenus = db.hideInMenus and true or false
   end
-  db["HelloCursor_hideInMenus"] = db.hideInMenus
 
   -- Always Show: treat as a new setting with its own default.
+  MergeBoolFromNamespaced("alwaysShow")
+
   if db.alwaysShow == nil then
     db.alwaysShow = DEFAULTS.alwaysShow and true or false
   else
     db.alwaysShow = db.alwaysShow and true or false
   end
 
-  db["HelloCursor_alwaysShow"] = db.alwaysShow
+  -- Migrate primary visibility toggles from any legacy namespaced
+  -- fields before deriving per-zone behaviour.
+  MergeBoolFromNamespaced("showInCombat")
+  MergeBoolFromNamespaced("doNotShowWorld")
+  MergeBoolFromNamespaced("doNotShowHousing")
+  MergeBoolFromNamespaced("doNotShowPvE")
+  MergeBoolFromNamespaced("doNotShowPvP")
 
   -- Legacy zone flags (positive semantics)
   local legacyShowWorld    = BoolOrNil(db.showWorld)
@@ -195,22 +253,9 @@ local function SyncVisibilityFlagsFromLegacy()
     db.doNotShowPvP = db.doNotShowPvP and true or false
   end
 
-  -- Keep namespaced versions in sync for Settings UI.
-  db["HelloCursor_doNotShowWorld"]   = db.doNotShowWorld
-  db["HelloCursor_doNotShowHousing"] = db.doNotShowHousing
-  db["HelloCursor_doNotShowPvE"]     = db.doNotShowPvE
-  db["HelloCursor_doNotShowPvP"]     = db.doNotShowPvP
-
-  -- Maintain legacy positive flags for backwards compatibility.
-  db.showWorld   = not db.doNotShowWorld
-  db.showHousing = not db.doNotShowHousing
-  db.showPvE     = not db.doNotShowPvE
-  db.showPvP     = not db.doNotShowPvP
-
-  db["HelloCursor_showWorld"]   = db.showWorld
-  db["HelloCursor_showHousing"] = db.showHousing
-  db["HelloCursor_showPvE"]     = db.showPvE
-  db["HelloCursor_showPvP"]     = db.showPvP
+  -- Do not recreate legacy positive flags (showWorld / HelloCursor_showWorld
+  -- etc). They are now fully deprecated and cleaned up by
+  -- CleanupLegacySavedVariables so they can disappear from SavedVariables.
 end
 
 -- ---------------------------------------------------------------------
@@ -272,7 +317,6 @@ local function SyncMouselookModeFromLegacy()
   mode = NormalizeMouselookMode(mode)
 
   HelloCursorDB.mouselookMode = mode
-  HelloCursorDB["HelloCursor_mouselookMode"] = mode
 
   -- Keep legacy booleans in sync for any external readers, but the
   -- addon logic itself derives behaviour from mouselookMode.
@@ -281,9 +325,6 @@ local function SyncMouselookModeFromLegacy()
 
   HelloCursorDB.reactiveCursor = reactive
   HelloCursorDB.showWhileMouselooking = showML
-
-  HelloCursorDB["HelloCursor_reactiveCursor"] = reactive
-  HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
 end
 
 local function IsMouselookShowEnabled()
@@ -362,7 +403,6 @@ local function GetNormalizedSize()
   local size = NearestSupportedSize(HelloCursorDB.size)
 
   HelloCursorDB.size = size
-  HelloCursorDB["HelloCursor_size"] = size
 
   return size
 end
@@ -1415,3 +1455,4 @@ HC.IsAddonEnabled = HC.Util and HC.Util.IsAddonEnabled or nil
 HC.SyncRingStyleFlags = SyncRingStyleFlags
 HC.SyncColorModeFromLegacy = SyncColorModeFromLegacy
 HC.SyncVisibilityFlagsFromLegacy = SyncVisibilityFlagsFromLegacy
+HC.CleanupLegacySavedVariables = CleanupLegacySavedVariables

@@ -35,7 +35,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     local size = tonumber(HelloCursorDB.size)
     if size == 192 then
       HelloCursorDB.size = 128
-      HelloCursorDB["HelloCursor_size"] = 128
     end
 
     if HC.SyncRingStyleFlags then
@@ -46,6 +45,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     -- so legacy useClassColor is correctly reflected in colorMode.
     if HC.SyncColorModeFromLegacy then
       HC.SyncColorModeFromLegacy()
+    end
+
+    -- After all migrations have run, clean up any legacy-only
+    -- SavedVariables that are no longer used.
+    if HC.CleanupLegacySavedVariables then
+      HC.CleanupLegacySavedVariables()
     end
 
     HC.CaptureCursorNow()
@@ -95,11 +100,9 @@ SLASH_HELLOCURSOR2 = "/hellocursor"
 
 SlashCmdList.HELLOCURSOR = function(msg)
   if msg == "toggle" then
-    local nsKey = "HelloCursor_enabled"
     local current = HC.IsAddonEnabled()
     local newValue = not current
     HelloCursorDB.enabled = newValue
-    HelloCursorDB[nsKey] = newValue
     HC.UpdateVisibility()
     print(("HelloCursor: %s"):format(HelloCursorDB.enabled and "enabled" or "disabled"))
     return

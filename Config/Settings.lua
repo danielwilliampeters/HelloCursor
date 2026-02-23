@@ -52,9 +52,6 @@ local function ApplyMouselookModeToFlags(mode)
 
   HelloCursorDB.reactiveCursor = reactive
   HelloCursorDB.showWhileMouselooking = showML
-
-  HelloCursorDB["HelloCursor_reactiveCursor"] = reactive
-  HelloCursorDB["HelloCursor_showWhileMouselooking"] = showML
 end
 
 local function DeriveInstanceHideModeFromFlags(doNotShowPvE, doNotShowPvP)
@@ -88,9 +85,6 @@ local function ApplyInstanceHideModeToFlags(mode)
 
   HelloCursorDB.doNotShowPvE = doNotShowPvE
   HelloCursorDB.doNotShowPvP = doNotShowPvP
-
-  HelloCursorDB["HelloCursor_doNotShowPvE"] = doNotShowPvE
-  HelloCursorDB["HelloCursor_doNotShowPvP"] = doNotShowPvP
 end
 
 -- ---------------------------------------------------------------------
@@ -136,7 +130,6 @@ local function SetColorHex(hex)
   if not norm then return end
 
   HelloCursorDB.colorHex = norm
-  HelloCursorDB["HelloCursor_colorHex"] = norm
 
   ApplyTintIfNeeded(true)
   if hexEditBox then hexEditBox:SetText(norm) end
@@ -228,33 +221,6 @@ local function ResetToDefaults()
 
   -- Ensure style flags are consistent (classic vs neon + legacy useNeonRing)
   SyncRingStyleFlags()
-
-  -- Keep Settings-backed (namespaced) variables in sync so the Blizzard
-  -- Settings controls match defaults on reload.
-  local tracked = {
-    "enabled",
-    "alwaysShow",
-    "showInCombat",
-    "hideInMenus",
-    "doNotShowWorld",
-    "doNotShowHousing",
-    "doNotShowPvE",
-    "doNotShowPvP",
-    "instanceHideMode",
-    "mouselookMode",
-    "showGCDSpinner",
-    "size",
-    "colorMode",
-    "colorHex",
-    "classicRingStyle",
-  }
-
-  for _, key in ipairs(tracked) do
-    local nsKey = "HelloCursor_" .. key
-    if HelloCursorDB[key] ~= nil then
-      HelloCursorDB[nsKey] = HelloCursorDB[key]
-    end
-  end
 
   RefreshVisualsImmediate()
   UpdateVisibility()
@@ -465,18 +431,19 @@ local function CreateSettingsPanel()
 
     -- Seed the underlying storage from our existing DB field so the
     -- Settings panel reflects current values instead of always defaulting.
-    if HelloCursorDB[varName] == nil then
-      if HelloCursorDB[key] ~= nil then
-        HelloCursorDB[varName] = HelloCursorDB[key]
+    if HelloCursorDB[key] == nil then
+      local legacyNS = HelloCursorDB[varName]
+      if legacyNS ~= nil then
+        HelloCursorDB[key] = legacyNS
       else
-        HelloCursorDB[varName] = defaultValue
+        HelloCursorDB[key] = defaultValue
       end
     end
 
     local ok, setting = pcall(Settings.RegisterAddOnSetting,
       category,
       varName,     -- variable (must be globally unique)
-      varName,     -- variableKey
+      key,         -- variableKey within HelloCursorDB
       HelloCursorDB,
       VarTypeFor(defaultValue),
       name,
@@ -501,8 +468,7 @@ local function CreateSettingsPanel()
 
       local value = setting:GetValue()
 
-      -- keep both in sync
-      HelloCursorDB[varName] = value
+      -- store only the canonical key in SavedVariables
       HelloCursorDB[key] = value
 
       if key == "size" then
@@ -512,7 +478,6 @@ local function CreateSettingsPanel()
         end
 
         HelloCursorDB.size = v
-        HelloCursorDB[varName] = v
 
         RefreshSize()
         UpdateRingPosition()
@@ -521,7 +486,6 @@ local function CreateSettingsPanel()
         if key == "colorMode" then
           local isClass = (HelloCursorDB.colorMode == "class") and true or false
           HelloCursorDB.useClassColor = isClass
-          HelloCursorDB["HelloCursor_useClassColor"] = isClass
         end
 
         ApplyTintIfNeeded(true)
@@ -784,7 +748,7 @@ local function CreateSettingsPanel()
     local name = "Aggro Display"
     local tooltip =
       "Controls additional highlighting based on your target.\n" ..
-      "Off: Use only your chosen colour.\n" ..
+      "None: Use only your chosen colour.\n" ..
       "Hostile: Turn the ring red when your target is hostile or in combat with you.\n" ..
       "Threat: Turn the ring red when your target has threat on you."
 
@@ -801,7 +765,7 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
-        container:Add("none", "Off")
+        container:Add("none", "None")
         container:Add("hostile", "Hostile")
         container:Add("threat", "Threat")
         return container:GetData()
