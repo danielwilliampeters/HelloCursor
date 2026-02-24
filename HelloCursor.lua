@@ -459,11 +459,19 @@ local function IsAllowedInZoneByLocationOnly()
 end
 
 local function IsAllowedInZone()
+  -- When Always mode is enabled, visibility is controlled purely by
+  -- location and the "Do Not Show" overrides.
+  if HelloCursorDB.alwaysShow then
+    return IsAllowedInZoneByLocationOnly()
+  end
+
+  -- When Always mode is disabled, only show the ring during combat
+  -- if the combat-only option is enabled.
   if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
     return true
   end
 
-  return IsAllowedInZoneByLocationOnly()
+  return false
 end
 
 -- Temporary override: allow ring to show while using the color picker
@@ -492,16 +500,7 @@ local function ShouldShowRing()
     return true
   end
 
-  -- Optionally always show during combat (still respects menus / enabled state).
-  if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
-    return true
-  end
-
-  -- Optionally ignore combat gating but respect per-zone visibility.
-  if HelloCursorDB.alwaysShow then
-    return IsAllowedInZoneByLocationOnly()
-  end
-
+  -- Defer to zone/combat rules.
   return IsAllowedInZone()
 end
 

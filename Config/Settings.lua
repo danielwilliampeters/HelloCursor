@@ -489,7 +489,7 @@ local function CreateSettingsPanel()
         end
 
         ApplyTintIfNeeded(true)
-  RefreshColorUIEnabledState()
+        RefreshColorUIEnabledState()
 
       elseif key == "mouselookMode" then
         ApplyMouselookModeToFlags(HelloCursorDB.mouselookMode)
@@ -511,6 +511,17 @@ local function CreateSettingsPanel()
 
       elseif key == "instanceHideMode" then
         ApplyInstanceHideModeToFlags(HelloCursorDB.instanceHideMode)
+        ForceVisibilityRecompute()
+
+      elseif key == "showRingMode" then
+        local mode = tostring(HelloCursorDB.showRingMode or "always")
+        if mode == "always" then
+          HelloCursorDB.alwaysShow = true
+          HelloCursorDB.showInCombat = false
+        elseif mode == "combat" then
+          HelloCursorDB.alwaysShow = false
+          HelloCursorDB.showInCombat = true
+        end
         ForceVisibilityRecompute()
 
       elseif key == "doNotShowWorld"
@@ -705,6 +716,51 @@ local function CreateSettingsPanel()
     return setting
   end
 
+  local function AddShowRingModeDropdown()
+    local key = "showRingMode"
+    local name = "Show Ring"
+    local tooltip = "Choose when to show the cursor ring."
+
+    local defaultValue = "always"
+    local current = HelloCursorDB[key]
+
+    if current ~= "always" and current ~= "combat" then
+      if HelloCursorDB.alwaysShow then
+        current = "always"
+      elseif HelloCursorDB.showInCombat then
+        current = "combat"
+      else
+        current = defaultValue
+      end
+    end
+
+    HelloCursorDB[key] = current
+
+    if current == "always" then
+      HelloCursorDB.alwaysShow = true
+      HelloCursorDB.showInCombat = false
+    elseif current == "combat" then
+      HelloCursorDB.alwaysShow = false
+      HelloCursorDB.showInCombat = true
+    end
+
+    local setting = RegisterSetting(key, name, defaultValue)
+    OnChangedFor(key, setting)
+
+    if Settings.CreateControlTextContainer and Settings.CreateDropdown then
+      local function GetOptions()
+        local container = Settings.CreateControlTextContainer()
+        container:Add("always", "Always")
+        container:Add("combat", "Combat Only")
+        return container:GetData()
+      end
+
+      Settings.CreateDropdown(category, setting, GetOptions, tooltip)
+    end
+
+    return setting
+  end
+
   local function AddColorModeDropdown()
     local key = "colorMode"
     local name = "Color"
@@ -780,17 +836,7 @@ local function CreateSettingsPanel()
 
   AddHeader("Display")
 
-  AddCheckbox(
-    "alwaysShow",
-    "Always Show Cursor Ring",
-    "Show the cursor ring unless it is hidden by the options below."
-  )
-
-  AddCheckbox(
-    "showInCombat",
-    "Always Show in Combat",
-    "Show the cursor ring while you are in combat."
-  )
+  AddShowRingModeDropdown()
 
   AddCheckbox(
     "doNotShowWorld",
