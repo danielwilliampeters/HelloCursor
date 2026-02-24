@@ -719,7 +719,7 @@ local function CreateSettingsPanel()
   local function AddShowRingModeDropdown()
     local key = "showRingMode"
     local name = "Show Ring"
-    local tooltip = "Choose when to show the cursor ring."
+    local tooltip = "Choose when the cursor ring is shown."
 
     local defaultValue = "always"
     local current = HelloCursorDB[key]
@@ -751,7 +751,7 @@ local function CreateSettingsPanel()
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
         container:Add("always", "Always")
-        container:Add("combat", "Combat Only")
+        container:Add("combat", "In Combat")
         return container:GetData()
       end
 

@@ -468,7 +468,7 @@ local function IsAllowedInZone()
   -- When Always mode is disabled, only show the ring during combat
   -- if the combat-only option is enabled.
   if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
-    return true
+    return IsAllowedInZoneByLocationOnly()
   end
 
   return false
