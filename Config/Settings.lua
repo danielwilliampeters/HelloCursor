@@ -794,8 +794,8 @@ local function CreateSettingsPanel()
 
   AddCheckbox(
     "doNotShowWorld",
-    "Do Not Show Outside Instances",
-    "Hide the cursor ring outside dungeons, raids, and PvP instances."
+    "Do Not Show in Open World",
+    "Hides the ring outside instances."
   )
 
   AddInstanceModeDropdown()
