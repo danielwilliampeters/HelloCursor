@@ -521,6 +521,9 @@ local function CreateSettingsPanel()
         elseif mode == "combat" then
           HelloCursorDB.alwaysShow = false
           HelloCursorDB.showInCombat = true
+        elseif mode == "always_combat" then
+          HelloCursorDB.alwaysShow = true
+          HelloCursorDB.showInCombat = true
         end
         ForceVisibilityRecompute()
 
@@ -718,14 +721,18 @@ local function CreateSettingsPanel()
 
   local function AddShowRingModeDropdown()
     local key = "showRingMode"
-    local name = "Show Ring"
-    local tooltip = "Choose when the cursor ring is shown."
+    local name = "Show Cursor Ring"
+    local tooltip = "Choose when the cursor ring is shown. Combat Override ignores normal hiding rules while in combat."
 
     local defaultValue = "always"
     local current = HelloCursorDB[key]
 
-    if current ~= "always" and current ~= "combat" then
-      if HelloCursorDB.alwaysShow then
+    -- Normalize any legacy or out-of-range values using the
+    -- authoritative alwaysShow/showInCombat flags.
+    if current ~= "always" and current ~= "combat" and current ~= "always_combat" then
+      if HelloCursorDB.alwaysShow and HelloCursorDB.showInCombat then
+        current = "always_combat"
+      elseif HelloCursorDB.alwaysShow then
         current = "always"
       elseif HelloCursorDB.showInCombat then
         current = "combat"
@@ -742,6 +749,9 @@ local function CreateSettingsPanel()
     elseif current == "combat" then
       HelloCursorDB.alwaysShow = false
       HelloCursorDB.showInCombat = true
+    elseif current == "always_combat" then
+      HelloCursorDB.alwaysShow = true
+      HelloCursorDB.showInCombat = true
     end
 
     local setting = RegisterSetting(key, name, defaultValue)
@@ -752,6 +762,7 @@ local function CreateSettingsPanel()
         local container = Settings.CreateControlTextContainer()
         container:Add("always", "Always")
         container:Add("combat", "In Combat")
+        container:Add("always_combat", "Always (Combat Override)")
         return container:GetData()
       end
 

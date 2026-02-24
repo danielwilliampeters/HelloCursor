@@ -11,7 +11,7 @@ Designed for Retail with performance, polish, and configurability in mind.
 - **Reactive cursor mode**: Smoothly shrinks the ring while holding right mouse (mouselook), enabled by default (can be turned off)
 - **Freeze on mouselook**: Ring stays at the last cursor position when camera movement begins
 - **Zone-aware visibility**: Control visibility for the open world, player housing, and instanced content via a simple instances dropdown (None / PvE / PvP / All)
-- **Show ring modes**: Choose between always showing the ring (respecting per-zone "Do Not Show" overrides) or only showing it while you are in combat
+- **Show ring modes**: Choose between always showing the ring (respecting per-zone "Do Not Show" overrides), only showing it while you are in combat, or the combined **Always (Combat Override)** mode
 - **Global cooldown indicator**: Optional GCD visual on the cursor ring (enabled by default)
 - **Classic vs neon style**: Choose between a flat classic ring or a neon-style ring with inner glow
 - **Polished animation**: Subtle 0.08s size tween for smooth transitions
@@ -22,9 +22,10 @@ Designed for Retail with performance, polish, and configurability in mind.
 ## Configuration
 
 - Open the settings panel via `/hc`, `/hellocursor`, or the Interface → Options → AddOns → Hello Cursor entry.
-- Under **Show Ring**, choose:
+  -- Under **Show Ring**, choose:
   - **Always** – ring visibility is controlled by the per-zone **Do Not Show** options (open world, instances, housing)
-  - **Combat Only** – the ring is hidden out of combat and shown whenever you are in combat, regardless of zone (still respects the addon enable/menus/mouselook rules)
+  - **Combat Only** – the ring is hidden out of combat and shown whenever you are in combat, respecting per-zone **Do Not Show** options (still respects the addon enable/menus/mouselook rules)
+  - **Always (Combat Override)** – same as **Always**, but if you are in combat the ring is forced visible even when any **Do Not Show** options are enabled for your current zone (still hidden in menus when "Do Not Show in Menus" is enabled)
 - Adjust per-zone visibility using **Do Not Show in Open World**, **Do Not Show Inside Instances** (None / PvE / PvP / All), and **Do Not Show in Player Housing**.
 - Toggle reactive cursor mode, the global cooldown animation, and whether the ring hides while game menus are open.
 - Under **Ring Color**, choose between:

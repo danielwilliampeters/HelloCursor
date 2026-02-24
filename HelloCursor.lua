@@ -459,15 +459,17 @@ local function IsAllowedInZoneByLocationOnly()
 end
 
 local function IsAllowedInZone()
-  -- When Always mode is enabled, visibility is controlled purely by
-  -- location and the "Do Not Show" overrides.
+  local inCombat = UnitAffectingCombat("player") and true or false
+
+  if HelloCursorDB.alwaysShow and HelloCursorDB.showInCombat and inCombat then
+    return true
+  end
+
   if HelloCursorDB.alwaysShow then
     return IsAllowedInZoneByLocationOnly()
   end
 
-  -- When Always mode is disabled, only show the ring during combat
-  -- if the combat-only option is enabled.
-  if HelloCursorDB.showInCombat and UnitAffectingCombat("player") then
+  if HelloCursorDB.showInCombat and inCombat then
     return IsAllowedInZoneByLocationOnly()
   end
 
