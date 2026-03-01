@@ -355,6 +355,7 @@ local UnitExists          = UnitExists
 local UnitThreatSituation = UnitThreatSituation
 local UnitCanAttack       = UnitCanAttack
 local UnitIsDeadOrGhost   = UnitIsDeadOrGhost
+local UnitIsUnit          = UnitIsUnit
 local math_abs            = math.abs
 
 local function IsMouselookActive()
@@ -674,11 +675,21 @@ local function GetThreatLevelForTint()
   end
 
   local threatLevel = UnitThreatSituation("player", "target")
-  if not threatLevel or threatLevel <= 0 then
-    return nil
+  if threatLevel and threatLevel > 0 then
+    return threatLevel
   end
 
-  return threatLevel
+  -- Fallback: some mechanics (fixates, scripted target swaps) can
+  -- directly target the player without updating the standard threat
+  -- table in a way that UnitThreatSituation reports > 0. In those
+  -- cases we still want the "Threat" aggro mode to react when the
+  -- enemy is actually targeting you.
+  if UnitExists("targettarget") and UnitIsUnit and UnitIsUnit("targettarget", "player") then
+    -- Treat this as a high-threat state for tinting purposes.
+    return 3
+  end
+
+  return nil
 end
 
 local function ComputeHostileTint()

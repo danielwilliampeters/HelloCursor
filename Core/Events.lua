@@ -11,6 +11,7 @@ eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
 eventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
+eventFrame:RegisterEvent("UNIT_TARGET")
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" and arg1 == HC.ADDON_NAME then
@@ -86,6 +87,20 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
     if HelloCursorDB
       and (HelloCursorDB.aggroMode == "hostile" or HelloCursorDB.aggroMode == "threat")
       and arg1 == "player" then
+      HC.ApplyTintIfNeeded(false)
+    end
+    return
+  end
+
+  -- Some boss mechanics directly change who your target is attacking
+  -- (fixates, target swaps) without generating a distinct threat
+  -- event for the player. When "Threat" or "Hostile" aggro display
+  -- is enabled, react to target-of-target changes so the ring tint
+  -- can be updated based on the current target's target.
+  if event == "UNIT_TARGET" then
+    if HelloCursorDB
+      and (HelloCursorDB.aggroMode == "hostile" or HelloCursorDB.aggroMode == "threat")
+      and arg1 == "target" then
       HC.ApplyTintIfNeeded(false)
     end
     return
