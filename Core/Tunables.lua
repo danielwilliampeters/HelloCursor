@@ -12,6 +12,10 @@ HC.TUNE = {
   -- GCD pop animation
   GCD_POP_ENABLED   = true,
   GCD_POP_SCALE     = 1.16,
+  -- Optional non-uniform squash/stretch for neon GCD pop. If nil,
+  -- the addon falls back to GCD_POP_SCALE for both axes.
+  GCD_POP_SCALE_X   = 1.22,
+  GCD_POP_SCALE_Y   = 1.08,
   GCD_POP_UP_TIME   = 0.045,
   GCD_POP_DOWN_TIME = 0.075,
 

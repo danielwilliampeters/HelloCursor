@@ -932,6 +932,19 @@ local function TriggerGCDPop()
   if gcdPopAnim:IsPlaying() then
     gcdPopAnim:Stop()
   end
+
+  -- For neon style, apply a non-uniform squash/stretch so the
+  -- sides "pop" out more than the top/bottom. Fall back to the
+  -- legacy uniform scale for classic style or when the extra
+  -- tunables are not defined.
+  if IsNeonStyle and IsNeonStyle()
+    and HC.TUNE.GCD_POP_SCALE_X and HC.TUNE.GCD_POP_SCALE_Y
+  then
+    popUp:SetScale(HC.TUNE.GCD_POP_SCALE_X, HC.TUNE.GCD_POP_SCALE_Y)
+  else
+    popUp:SetScale(HC.TUNE.GCD_POP_SCALE, HC.TUNE.GCD_POP_SCALE)
+  end
+
   gcdPopAnim:Play()
 end
 
@@ -1209,7 +1222,6 @@ UpdateRingPosition = function()
   local x = (lastCursorX or cx) + CURSOR_OFFSET_X
   local y = (lastCursorY or cy) + CURSOR_OFFSET_Y
 
-  ringFrame:ClearAllPoints()
   ringFrame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
 end
 
@@ -1372,7 +1384,7 @@ visibilityDriver:SetScript("OnUpdate", function(_, elapsed)
   end
 
   visElapsed = visElapsed + (elapsed or 0)
-  if visElapsed < 0.10 then return end
+  if visElapsed < 0.02 then return end
   visElapsed = 0
 
   local menuOpen = HelloCursorDB.hideInMenus and IsAnyMenuOpen() or false
