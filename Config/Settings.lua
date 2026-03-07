@@ -724,7 +724,24 @@ local function CreateSettingsPanel()
     local name = "Show Cursor Ring"
     local tooltip = "Choose when the cursor ring is shown. Combat Override ignores normal hiding rules while in combat."
 
-    local defaultValue = "always"
+    -- Derive the dropdown's default from the canonical defaults so
+    -- the Blizzard "Defaults" button matches the addon defaults.
+    local function DeriveDefaultShowRingMode()
+      local always = DEFAULTS.alwaysShow and true or false
+      local combat = DEFAULTS.showInCombat and true or false
+
+      if always and combat then
+        return "always_combat"
+      elseif always then
+        return "always"
+      elseif combat then
+        return "combat"
+      end
+
+      return "combat"
+    end
+
+    local defaultValue = DeriveDefaultShowRingMode()
     local current = HelloCursorDB[key]
 
     -- Normalize any legacy or out-of-range values using the
