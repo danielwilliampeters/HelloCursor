@@ -1245,6 +1245,9 @@ local function RefreshSize()
 
   -- Always keep spinner swipe textures correct (depends on current style)
   do
+    -- GCD spinner uses the classic/base ring as its swipe
+    -- regardless of neon style. The visual spinner itself is
+    -- already restricted to non-neon style in CheckGCDPop.
     local swipeNormal = HC.TEX.RING[key]
     local swipeSmall  = HC.TEX.RING_SMALL[key] or HC.TEX.RING[key]
 
@@ -1258,9 +1261,17 @@ local function RefreshSize()
 
   -- Always update BOTH styles so toggling neon on/off keeps the same size
 
-  -- Flat ring
-  HC.Util.SafeSetTexture(ringTexNormal, HC.TEX.RING[key], HC.TEX.RING[96])
-  HC.Util.SafeSetTexture(ringTexSmall,  HC.TEX.RING_SMALL[key], HC.TEX.RING_SMALL[96] or HC.TEX.RING[96])
+  -- Flat ring: choose between classic/base and neon copies
+  local baseRingTable      = HC.TEX.RING
+  local baseRingSmallTable = HC.TEX.RING_SMALL
+
+  if IsNeonStyle() and HC.TEX.NEON_RING and HC.TEX.NEON_RING_SMALL then
+    baseRingTable      = HC.TEX.NEON_RING
+    baseRingSmallTable = HC.TEX.NEON_RING_SMALL
+  end
+
+  HC.Util.SafeSetTexture(ringTexNormal, baseRingTable[key],      baseRingTable[96])
+  HC.Util.SafeSetTexture(ringTexSmall,  baseRingSmallTable[key], baseRingSmallTable[96] or baseRingTable[96])
 
   -- Neon
   HC.Util.SafeSetTexture(neonCoreNormal,  HC.TEX.NEON_CORE[key],       HC.TEX.NEON_CORE[96])
