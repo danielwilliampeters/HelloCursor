@@ -27,6 +27,7 @@ local DEFAULTS = {
   doNotShowPvE = false,
   doNotShowPvP = false,
   mouselookMode = "shrink",
+  mouselookHoldDelay = 0,
   showGCDSpinner = true,
   classicRingStyle = false,
   size = 64,
@@ -364,7 +365,25 @@ end
 
 local rmbDownAt = 0
 local rmbIsDown = false
-local RMB_HOLD_THRESHOLD = 0.12
+
+local function GetMouselookHoldDelay()
+  local base = DEFAULTS.mouselookHoldDelay or 0.12
+
+  if not HelloCursorDB or type(HelloCursorDB) ~= "table" then
+    return base
+  end
+
+  local v = tonumber(HelloCursorDB.mouselookHoldDelay)
+  if not v then
+    return base
+  end
+
+  if v < 0 then
+    v = 0
+  end
+
+  return v
+end
 
 local function IsIntentionalMouselookActive()
   if not IsMouselookActive() then return false end
@@ -373,7 +392,13 @@ local function IsIntentionalMouselookActive()
   local downAt = rmbDownAt or 0
   if downAt <= 0 then return false end
 
-  return (GetTime() - downAt) >= RMB_HOLD_THRESHOLD
+  local threshold = GetMouselookHoldDelay()
+  if threshold <= 0 then
+    -- No delay: any active mouselook with RMB held is intentional.
+    return true
+  end
+
+  return (GetTime() - downAt) >= threshold
 end
 
 local GetNormalizedColorHex = HC.GetNormalizedColorHex or (HC.Util and HC.Util.GetNormalizedColorHex)
