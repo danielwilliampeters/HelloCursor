@@ -30,7 +30,7 @@ local DEFAULTS = {
   mouselookHoldDelay = 0,
   showGCDSpinner = true,
   classicRingStyle = false,
-  size = "compact",
+  size = "standard",
 }
 
 local function SyncRingStyleFlags()
@@ -404,24 +404,24 @@ end
 local GetNormalizedColorHex = HC.GetNormalizedColorHex or (HC.Util and HC.Util.GetNormalizedColorHex)
 
 local SIZE_NAME_TO_PIXELS = {
-  compact  = 64,
-  standard = 80,
-  medium   = 96,
-  large    = 128,
+  compact  = 48,
+  standard = 64,
+  medium   = 80,
+  large    = 96,
 }
 
 local PIXELS_TO_SIZE_NAME = {
-  [64]  = "compact",
-  [80]  = "standard",
-  [96]  = "medium",
-  [128] = "large",
+  [48] = "compact",
+  [64] = "standard",
+  [80] = "medium",
+  [96] = "large",
 }
 
 local VALID_SIZES = {
-  [64]  = true,
-  [80]  = true,
-  [96]  = true,
-  [128] = true,
+  [48] = true,
+  [64] = true,
+  [80] = true,
+  [96] = true,
 }
 
 local DEFAULT_SIZE_PIXELS = SIZE_NAME_TO_PIXELS[DEFAULTS.size] or 80
@@ -432,13 +432,14 @@ local function NearestSupportedSize(n)
 
   if VALID_SIZES[n] then return n end
 
-  -- Explicit migration: old "Huge" 192 -> 128
-  if n == 192 then return 128 end
+  -- Explicit migration: old "Huge" 192 -> previous largest, now 96
+  if n == 192 then return 96 end
 
-  -- Fallback: snap to nearest supported
-  if n < 88  then return 80 end
-  if n < 112 then return 96 end
-  return 128
+  -- Fallback: snap to nearest supported (48, 64, 80, 96)
+  if n < 56 then return 48 end
+  if n < 72 then return 64 end
+  if n < 88 then return 80 end
+  return 96
 end
 
 -- Normalize any stored size (string name or legacy numeric) into a
