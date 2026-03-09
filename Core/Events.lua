@@ -32,10 +32,14 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         or (HC.DEFAULTS and HC.DEFAULTS.colorHex)
     end
 
-    -- Legacy migration only (authoritative normalization lives in core)
-    local size = tonumber(HelloCursorDB.size)
-    if size == 192 then
-      HelloCursorDB.size = 128
+    -- Normalize legacy size values into the new named-size format.
+    if HC.NormalizeSizeSetting then
+      HelloCursorDB.size = HC.NormalizeSizeSetting(HelloCursorDB.size)
+    else
+      local size = tonumber(HelloCursorDB.size)
+      if size == 192 then
+        HelloCursorDB.size = 128
+      end
     end
 
     if HC.SyncRingStyleFlags then

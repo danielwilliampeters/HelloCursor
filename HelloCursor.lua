@@ -30,7 +30,7 @@ local DEFAULTS = {
   mouselookHoldDelay = 0,
   showGCDSpinner = true,
   classicRingStyle = false,
-  size = 64,
+  size = "compact",
 }
 
 local function SyncRingStyleFlags()
@@ -403,6 +403,20 @@ end
 
 local GetNormalizedColorHex = HC.GetNormalizedColorHex or (HC.Util and HC.Util.GetNormalizedColorHex)
 
+local SIZE_NAME_TO_PIXELS = {
+  compact  = 64,
+  standard = 80,
+  medium   = 96,
+  large    = 128,
+}
+
+local PIXELS_TO_SIZE_NAME = {
+  [64]  = "compact",
+  [80]  = "standard",
+  [96]  = "medium",
+  [128] = "large",
+}
+
 local VALID_SIZES = {
   [64]  = true,
   [80]  = true,
@@ -410,9 +424,11 @@ local VALID_SIZES = {
   [128] = true,
 }
 
+local DEFAULT_SIZE_PIXELS = SIZE_NAME_TO_PIXELS[DEFAULTS.size] or 80
+
 local function NearestSupportedSize(n)
   n = tonumber(n)
-  if not n then return DEFAULTS.size end
+  if not n then return DEFAULT_SIZE_PIXELS end
 
   if VALID_SIZES[n] then return n end
 
@@ -425,12 +441,39 @@ local function NearestSupportedSize(n)
   return 128
 end
 
+-- Normalize any stored size (string name or legacy numeric) into a
+-- canonical named size for SavedVariables.
+local function NormalizeSizeSetting(value)
+  if type(value) == "string" then
+    local key = value:lower()
+    if SIZE_NAME_TO_PIXELS[key] then
+      return key
+    end
+  end
+
+  local n = tonumber(value)
+  if n then
+    local snapped = NearestSupportedSize(n)
+    return PIXELS_TO_SIZE_NAME[snapped] or DEFAULTS.size
+  end
+
+  if SIZE_NAME_TO_PIXELS[DEFAULTS.size] then
+    return DEFAULTS.size
+  end
+
+  return "compact"
+end
+
+-- Returns the pixel size to use for rendering, while ensuring the
+-- SavedVariables always store a named size.
 local function GetNormalizedSize()
-  local size = NearestSupportedSize(HelloCursorDB.size)
+  local sizeName = NormalizeSizeSetting(HelloCursorDB and HelloCursorDB.size)
+  if HelloCursorDB then
+    HelloCursorDB.size = sizeName
+  end
 
-  HelloCursorDB.size = size
-
-  return size
+  local pixels = SIZE_NAME_TO_PIXELS[sizeName] or DEFAULT_SIZE_PIXELS
+  return pixels
 end
 
 -- ---------------------------------------------------------------------
@@ -1302,7 +1345,6 @@ end
 
 local function RefreshSize()
   local size = GetNormalizedSize()
-  HelloCursorDB.size = size
 
   ringFrame:SetSize(HC.TUNE.RING_CANVAS_SIZE, HC.TUNE.RING_CANVAS_SIZE)
 
@@ -1552,6 +1594,8 @@ HC.NearestKey = HC.Util and HC.Util.NearestKey or nil
 HC.HexToRGBA = HC.Util and HC.Util.HexToRGBA or nil
 HC.RGBAtoHex = HC.Util and HC.Util.RGBAtoHex or nil
 HC.GetNormalizedColorHex = HC.Util and HC.Util.GetNormalizedColorHex or nil
+
+HC.NormalizeSizeSetting = NormalizeSizeSetting
 
 HC.RefreshSize = RefreshSize
 HC.UpdateRingPosition = UpdateRingPosition

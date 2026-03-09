@@ -472,12 +472,9 @@ local function CreateSettingsPanel()
       HelloCursorDB[key] = value
 
       if key == "size" then
-        local v = tonumber(HelloCursorDB.size) or DEFAULTS.size
-        if v ~= 64 and v ~= 80 and v ~= 96 and v ~= 128 then
-          v = DEFAULTS.size or 80
+        if HC.NormalizeSizeSetting then
+          HelloCursorDB.size = HC.NormalizeSizeSetting(HelloCursorDB.size)
         end
-
-        HelloCursorDB.size = v
 
         RefreshSize()
         UpdateRingPosition()
@@ -581,12 +578,13 @@ local function CreateSettingsPanel()
     local name = "Size"
     local tooltip = "Adjust the size of the cursor ring."
 
-    local defaultValue = DEFAULTS[key] or 96
-    local current = tonumber(HelloCursorDB[key]) or defaultValue
+    local defaultValue = DEFAULTS[key] or "standard"
 
-    -- Only allow the authored texture keys; fall back to default if needed
-    if current ~= 64 and current ~= 80 and current ~= 96 and current ~= 128 then
-      current = defaultValue
+    local current = HelloCursorDB[key]
+    if HC.NormalizeSizeSetting then
+      current = HC.NormalizeSizeSetting(current)
+    else
+      current = tostring(current or defaultValue)
     end
     HelloCursorDB[key] = current
 
@@ -596,10 +594,10 @@ local function CreateSettingsPanel()
     if Settings.CreateControlTextContainer and Settings.CreateDropdown then
       local function GetOptions()
         local container = Settings.CreateControlTextContainer()
-        container:Add(64,  "Compact")
-        container:Add(80,  "Standard")
-        container:Add(96,  "Medium")
-        container:Add(128, "Large")
+        container:Add("compact",  "Compact")
+        container:Add("standard", "Standard")
+        container:Add("medium",   "Medium")
+        container:Add("large",    "Large")
         return container:GetData()
       end
 
