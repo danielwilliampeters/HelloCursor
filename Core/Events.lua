@@ -32,13 +32,32 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1)
         or (HC.DEFAULTS and HC.DEFAULTS.colorHex)
     end
 
+    -- One-time migration for sizes
+    if not HelloCursorDB._sizeMigration_2026_01 then
+      local s = HelloCursorDB.size
+      if type(s) == "string" then
+        local key = s:lower()
+        if key == "compact" then
+          HelloCursorDB.size = "standard"
+        elseif key == "standard" then
+          HelloCursorDB.size = "medium"
+        elseif key == "medium" then
+          HelloCursorDB.size = "large"
+        elseif key == "large" then
+          HelloCursorDB.size = "large"
+        end
+      end
+
+      HelloCursorDB._sizeMigration_2026_01 = true
+    end
+
     -- Normalize legacy size values into the new named-size format.
     if HC.NormalizeSizeSetting then
       HelloCursorDB.size = HC.NormalizeSizeSetting(HelloCursorDB.size)
     else
       local size = tonumber(HelloCursorDB.size)
       if size == 192 then
-        HelloCursorDB.size = 128
+        HelloCursorDB.size = 96
       end
     end
 
