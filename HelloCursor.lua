@@ -1014,6 +1014,59 @@ local function CheckGCDPop()
   lastGCDRemaining = remaining
 end
 
+-- ---------------------------------------------------------------------
+-- RMB mouselook squash (small-ring appear)
+-- ---------------------------------------------------------------------
+
+local mouselookSquashAnim = ringFrame:CreateAnimationGroup()
+
+local mlSquashUp = mouselookSquashAnim:CreateAnimation("Scale")
+mlSquashUp:SetOrder(1)
+mlSquashUp:SetDuration(HC.TUNE.RMB_SQUASH_UP_TIME)
+mlSquashUp:SetSmoothing("OUT")
+
+local mlSquashDown = mouselookSquashAnim:CreateAnimation("Scale")
+mlSquashDown:SetOrder(2)
+mlSquashDown:SetDuration(HC.TUNE.RMB_SQUASH_DOWN_TIME)
+mlSquashDown:SetSmoothing("IN")
+
+local function StopMouselookSquash()
+  if mouselookSquashAnim:IsPlaying() then
+    mouselookSquashAnim:Stop()
+  end
+  ringFrame:SetScale(1, 1)
+end
+
+mouselookSquashAnim:SetScript("OnPlay", function()
+  -- Ensure we always start from a clean base scale.
+  ringFrame:SetScale(1, 1)
+
+  local sx = HC.TUNE.RMB_SQUASH_SCALE_X or 1.20
+  local sy = HC.TUNE.RMB_SQUASH_SCALE_Y or 0.85
+
+  -- First phase: briefly squash/stretch the ring
+  mlSquashUp:SetScale(sx, sy)
+end)
+
+mouselookSquashAnim:SetScript("OnFinished", function()
+  ringFrame:SetScale(1, 1)
+end)
+
+mouselookSquashAnim:SetScript("OnStop", function()
+  ringFrame:SetScale(1, 1)
+end)
+
+local function TriggerMouselookSquash()
+  if not HC.TUNE.RMB_SQUASH_ENABLED then return end
+  if not ringFrame:IsShown() then return end
+
+  StopMouselookSquash()
+
+  mlSquashDown:SetScale(1, 1)
+
+  mouselookSquashAnim:Play()
+end
+
 local function ResyncGCDVisualsAfterPicker()
   if HelloCursorDB.showGCDSpinner then
     gcdCheckAccum = 0
@@ -1118,11 +1171,11 @@ SetMix = function(mix)
       -- Wide, obvious swing while pulsing.
       -- We blend between steady neon and pulsing neon using pulseStrength.
       local corePulse  = HC.Util.Lerp(HC.TUNE.NEON_PULSE_CORE_MIN,  HC.TUNE.NEON_PULSE_CORE_MAX,  osc)
-      -- local innerPulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_INNER_MIN, HC.TUNE.NEON_PULSE_INNER_MAX, osc)
+      local innerPulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_INNER_MIN, HC.TUNE.NEON_PULSE_INNER_MAX, osc)
       local edgePulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_EDGE_MIN, HC.TUNE.NEON_PULSE_EDGE_MAX, osc)
 
       coreBase  = HC.Util.Lerp(coreBase,  corePulse,  pulseStrength)
-      -- innerBase = HC.Util.Lerp(innerBase, innerPulse, pulseStrength)
+      innerBase = HC.Util.Lerp(innerBase, innerPulse, pulseStrength)
       edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
     end
 
@@ -1335,6 +1388,7 @@ local function UpdateVisibility()
         StopTween()
         currentMix = 0
         SetMix(0)
+        TriggerMouselookSquash()
         -- optional: keep this consistent with your OnUpdate target tracking
         -- lastTargetMix = 0
       else
@@ -1351,6 +1405,7 @@ local function UpdateVisibility()
     ringFrame:Show()
 
   else
+    StopMouselookSquash()
     ringFrame:Hide()
 
     -- Optional but recommended: clear cached cursor so next show always
@@ -1432,6 +1487,12 @@ ringFrame:SetScript("OnUpdate", function(_, elapsed)
 
   local targetMix = WantsSmallRing() and 1 or 0
   if targetMix ~= lastTargetMix then
+    -- When we first transition into the small-ring state (0 -> 1),
+    -- play the squash so the shrink feels like it squashes in.
+    if targetMix == 1 and lastTargetMix == 0 then
+      TriggerMouselookSquash()
+    end
+
     lastTargetMix = targetMix
     if HelloCursorDB.showGCDSpinner then
       CheckGCDPop()
