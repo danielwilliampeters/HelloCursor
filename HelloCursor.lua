@@ -607,18 +607,6 @@ neonEdgeNormal:SetBlendMode("ADD")
 neonEdgeSmall:SetBlendMode("ADD")
 
 -- =========================================================
--- NEON INNER (top highlight)
--- =========================================================
-local neonInnerNormal = ringFrame:CreateTexture(nil, "OVERLAY")
-local neonInnerSmall  = ringFrame:CreateTexture(nil, "OVERLAY")
-
-neonInnerNormal:SetAllPoints(true)
-neonInnerSmall:SetAllPoints(true)
-
-neonInnerNormal:SetBlendMode("ADD")
-neonInnerSmall:SetBlendMode("ADD")
-
--- =========================================================
 -- NEON CORE (above base)
 -- =========================================================
 local neonCoreNormal = ringFrame:CreateTexture(nil, "ARTWORK")
@@ -639,9 +627,6 @@ if HC.TEX and HC.Util and HC.Util.SafeSetTexture then
 
   HC.Util.SafeSetTexture(neonCoreNormal,  HC.TEX.NEON_CORE[96], nil)
   HC.Util.SafeSetTexture(neonCoreSmall,   HC.TEX.NEON_CORE_SMALL[96], HC.TEX.NEON_CORE[96])
-
-  HC.Util.SafeSetTexture(neonInnerNormal, HC.TEX.NEON_INNER[96], nil)
-  HC.Util.SafeSetTexture(neonInnerSmall,  HC.TEX.NEON_INNER_SMALL[96], HC.TEX.NEON_INNER[96])
 
   HC.Util.SafeSetTexture(neonEdgeNormal, HC.TEX.NEON_EDGE[96], nil)
   HC.Util.SafeSetTexture(neonEdgeSmall,  HC.TEX.NEON_EDGE_SMALL[96], HC.TEX.NEON_EDGE[96])
@@ -707,8 +692,6 @@ local function SetStyleVisibility()
 
   SetShownSafe(neonCoreNormal,  neon)
   SetShownSafe(neonCoreSmall,   neon and showSmall)
-  SetShownSafe(neonInnerNormal, neon)
-  SetShownSafe(neonInnerSmall,  neon and showSmall)
   SetShownSafe(neonEdgeNormal, neon)
   SetShownSafe(neonEdgeSmall,  neon and showSmall)
 end
@@ -864,7 +847,6 @@ local function ApplyTintIfNeeded(force)
     if not (WantsSmallRing and WantsSmallRing()) then
       ringTexSmall:SetAlpha(0)
       neonCoreSmall:SetAlpha(0)
-      neonInnerSmall:SetAlpha(0)
       neonEdgeSmall:SetAlpha(0)
     end
   end
@@ -878,9 +860,7 @@ local function ApplyTintIfNeeded(force)
     neonCoreNormal:SetVertexColor(1, 1, 1)
     neonCoreSmall:SetVertexColor(1, 1, 1)
 
-    -- Tint the glow layers with your chosen color (RGB only)
-    neonInnerNormal:SetVertexColor(r, g, b)
-    neonInnerSmall:SetVertexColor(r, g, b)
+    -- Inner glow is disabled; leave its vertex color unchanged.
 
     neonEdgeNormal:SetVertexColor(1, 1, 1)
     neonEdgeSmall:SetVertexColor(1, 1, 1)
@@ -1167,7 +1147,7 @@ SetMix = function(mix)
 
       if neon then
         neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(0)
-        neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(0)
+        neonEdgeNormal:SetAlpha(0);  neonEdgeSmall:SetAlpha(0)
       end
       return
     end
@@ -1200,49 +1180,42 @@ SetMix = function(mix)
 
   -- Neon overlays (only when neon style enabled)
   if neon then
-    -- GCD-driven neon pulse (core + inner) while GCD is active.
+    -- GCD-driven neon pulse (core + edge) while GCD is active.
     local pulseStrength = neonPulseStrength or 0
 
     -- Default (no pulse): your normal steady neon
     local coreBase  = HC.TUNE.NEON_ALPHA_CORE
-    local innerBase = HC.TUNE.NEON_ALPHA_INNER
     local edgeBase  = HC.TUNE.NEON_ALPHA_EDGE
 
     if pulseStrength > 0 then
       -- osc: 0..1
-      local osc = 0.5 + 0.5 * math.sin(GetTime() * HC.TUNE.NEON_GCD_PULSE_SPEED * 2 * math.pi)
+      local osc = 0.5 + 0.5 *  math.sin(GetTime() * HC.TUNE.NEON_GCD_PULSE_SPEED * 2 * math.pi)
 
       -- Wide, obvious swing while pulsing.
       -- We blend between steady neon and pulsing neon using pulseStrength.
       local corePulse  = HC.Util.Lerp(HC.TUNE.NEON_PULSE_CORE_MIN,  HC.TUNE.NEON_PULSE_CORE_MAX,  osc)
-      local innerPulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_INNER_MIN, HC.TUNE.NEON_PULSE_INNER_MAX, osc)
       local edgePulse = HC.Util.Lerp(HC.TUNE.NEON_PULSE_EDGE_MIN, HC.TUNE.NEON_PULSE_EDGE_MAX, osc)
 
       coreBase  = HC.Util.Lerp(coreBase,  corePulse,  pulseStrength)
-      innerBase = HC.Util.Lerp(innerBase, innerPulse, pulseStrength)
       edgeBase = HC.Util.Lerp(edgeBase, edgePulse, pulseStrength)
     end
 
     if effectiveMix <= 0.0001 then
       neonCoreNormal:SetAlpha(coreBase);   neonCoreSmall:SetAlpha(0)
-      neonInnerNormal:SetAlpha(innerBase); neonInnerSmall:SetAlpha(0)
-      neonEdgeNormal:SetAlpha(edgeBase); neonEdgeSmall:SetAlpha(0)
+      neonEdgeNormal:SetAlpha(edgeBase);   neonEdgeSmall:SetAlpha(0)
     elseif effectiveMix >= 0.9999 then
-      neonCoreNormal:SetAlpha(0);  neonCoreSmall:SetAlpha(coreBase)
-      neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(innerBase)
-      neonEdgeNormal:SetAlpha(0); neonEdgeSmall:SetAlpha(edgeBase)
+      neonCoreNormal:SetAlpha(0);          neonCoreSmall:SetAlpha(coreBase)
+      neonEdgeNormal:SetAlpha(0);          neonEdgeSmall:SetAlpha(edgeBase)
     else
       local aN = 1 - effectiveMix
       local aS = effectiveMix
       neonCoreNormal:SetAlpha(aN * coreBase);   neonCoreSmall:SetAlpha(aS * coreBase)
-      neonInnerNormal:SetAlpha(aN * innerBase); neonInnerSmall:SetAlpha(aS * innerBase)
       neonEdgeNormal:SetAlpha(aN * edgeBase)
       neonEdgeSmall:SetAlpha(aS * edgeBase)
     end
   else
     -- ensure overlays are invisible if neon is off
     neonCoreNormal:SetAlpha(0); neonCoreSmall:SetAlpha(0)
-    neonInnerNormal:SetAlpha(0); neonInnerSmall:SetAlpha(0)
     neonEdgeNormal:SetAlpha(0); neonEdgeSmall:SetAlpha(0)
   end
 end
@@ -1384,9 +1357,6 @@ local function RefreshSize()
   -- Neon
   HC.Util.SafeSetTexture(neonCoreNormal,  HC.TEX.NEON_CORE[key],       HC.TEX.NEON_CORE[96])
   HC.Util.SafeSetTexture(neonCoreSmall,   HC.TEX.NEON_CORE_SMALL[key], HC.TEX.NEON_CORE_SMALL[96] or HC.TEX.NEON_CORE[96])
-
-  HC.Util.SafeSetTexture(neonInnerNormal, HC.TEX.NEON_INNER[key],      HC.TEX.NEON_INNER[96])
-  HC.Util.SafeSetTexture(neonInnerSmall,  HC.TEX.NEON_INNER_SMALL[key], HC.TEX.NEON_INNER_SMALL[96] or HC.TEX.NEON_INNER[96])
 
   HC.Util.SafeSetTexture(neonEdgeNormal, HC.TEX.NEON_EDGE[key], HC.TEX.NEON_EDGE[96])
   HC.Util.SafeSetTexture(neonEdgeSmall,  HC.TEX.NEON_EDGE_SMALL[key], HC.TEX.NEON_EDGE_SMALL[96] or HC.TEX.NEON_EDGE[96])

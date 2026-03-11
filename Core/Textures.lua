@@ -46,20 +46,6 @@ HC.TEX = {
     [96]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_core_small_96.tga",
   },
 
-  NEON_INNER = {
-    [48]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_48.tga",
-    [64]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_64.tga",
-    [80]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_80.tga",
-    [96]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_96.tga",
-  },
-
-  NEON_INNER_SMALL = {
-    [48]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_small_48.tga",
-    [64]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_small_64.tga",
-    [80]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_small_80.tga",
-    [96]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_inner_small_96.tga",
-  },
-
   NEON_EDGE = {
     [48]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_edge_48.tga",
     [64]  = "Interface\\AddOns\\HelloCursor\\Assets\\Rings\\Modern\\ring_edge_64.tga",
