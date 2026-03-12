@@ -133,7 +133,7 @@ def generate_layer(
     print(f"\nGenerating {output_prefix} from {master_path.name}")
 
     source_img = load_rgba(master_path)
-    source_base = load_rgba(base_dir / "ring_192.tga")
+    source_base = load_rgba(base_dir / "ring_96.tga")
     source_annulus = detect_annulus_from_alpha(source_base)
 
     generated_count = 0
@@ -183,8 +183,8 @@ def main() -> None:
         raise FileNotFoundError(f"Masters dir not found: {masters_dir}")
 
     masters = {
-        "ring_core_192.tga": "ring_core",
-        "ring_edge_192.tga": "ring_edge",
+        "ring_core_96.tga": "ring_core",
+        "ring_edge_96.tga": "ring_edge",
     }
 
     for master_filename, output_prefix in masters.items():

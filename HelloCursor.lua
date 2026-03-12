@@ -16,7 +16,7 @@ HC.VERSION = VERSION
 
 local DEFAULTS = {
   enabled = true,
-  colorHex = "FF4FD8",
+  colorHex = "FC0AA4",
   colorMode = "default",
   aggroMode = "none",
   showInCombat = true,
