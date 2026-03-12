@@ -28,9 +28,9 @@ HC.TUNE = {
   RING_CANVAS_SIZE = 192,
 
   -- Neon overlay alphas
-  NEON_ALPHA_BASE  = 0.90,
-  NEON_ALPHA_CORE  = 0.56,
-  NEON_ALPHA_EDGE  = 0.40,
+  NEON_ALPHA_BASE  = 1.00,
+  NEON_ALPHA_CORE  = 0.48,
+  NEON_ALPHA_EDGE  = 0.38,
 
   -- Neon GCD pulsing behaviour
   NEON_GCD_PULSE_ENABLED = true,
@@ -38,7 +38,7 @@ HC.TUNE = {
 
   -- Pulse alpha ranges
   NEON_PULSE_CORE_MIN    = 0.18,
-  NEON_PULSE_CORE_MAX    = 0.95,
+  NEON_PULSE_CORE_MAX    = 0.72,
   NEON_PULSE_EDGE_MIN    = 0.16,
   NEON_PULSE_EDGE_MAX    = 0.54,
 
