@@ -853,14 +853,8 @@ local function ApplyTintIfNeeded(force)
 
   local neon = IsNeonStyle()
   if neon then
-    -- Keep the CORE and EDGE white; only tint RGB. Alpha for all
-    -- neon layers is driven exclusively via SetAlpha in SetMix so we
-    -- never accidentally "override" the configured neon opacity
-    -- when the tint changes (fixes brief fully-white flashes).
     neonCoreNormal:SetVertexColor(1, 1, 1)
     neonCoreSmall:SetVertexColor(1, 1, 1)
-
-    -- Inner glow is disabled; leave its vertex color unchanged.
 
     neonEdgeNormal:SetVertexColor(1, 1, 1)
     neonEdgeSmall:SetVertexColor(1, 1, 1)
