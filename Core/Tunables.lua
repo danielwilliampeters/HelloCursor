@@ -11,15 +11,15 @@ HC.TUNE = {
 
   -- GCD pop animation
   GCD_POP_ENABLED   = true,
-  GCD_POP_SCALE     = 1.28,
-  GCD_POP_SCALE_X   = 1.30,
-  GCD_POP_SCALE_Y   = 1.16,
+  GCD_POP_SCALE     = 1.30,
+  GCD_POP_SCALE_X   = 1.40,
+  GCD_POP_SCALE_Y   = 1.19,
   GCD_POP_UP_TIME   = 0.04,
   GCD_POP_DOWN_TIME = 0.10,
 
   -- RMB mouselook squash when the small ring first appears
   RMB_SQUASH_ENABLED   = true,
-  RMB_SQUASH_SCALE_X   = 1.04,
+  RMB_SQUASH_SCALE_X   = 1.06,
   RMB_SQUASH_SCALE_Y   = 0.90,
   RMB_SQUASH_UP_TIME   = 0.04,
   RMB_SQUASH_DOWN_TIME = 0.10,

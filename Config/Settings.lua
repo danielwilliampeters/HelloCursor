@@ -688,8 +688,8 @@ local function CreateSettingsPanel()
 
   local function AddMouselookModeDropdown()
     local key = "mouselookMode"
-    local name = "Mouselook Behaviour (RMB)"
-    local tooltip = "Change how the cursor ring behaves while mouselooking."
+    local name = "Mouselook Behaviour"
+    local tooltip = "Choose how the cursor ring behaves while mouselooking."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -720,7 +720,7 @@ local function CreateSettingsPanel()
   local function AddShowRingModeDropdown()
     local key = "showRingMode"
     local name = "Show Cursor Ring"
-    local tooltip = "Choose when the cursor ring is shown. Combat Override ignores normal hiding rules while in combat."
+    local tooltip = "Choose when the cursor ring is shown. 'Always' and 'In Combat' can still be hidden by Do Not Show rules. 'Always (Force in Combat)' overrides those rules while in combat."
 
     -- Derive the dropdown's default from the canonical defaults so
     -- the Blizzard "Defaults" button matches the addon defaults.
@@ -777,7 +777,7 @@ local function CreateSettingsPanel()
         local container = Settings.CreateControlTextContainer()
         container:Add("always", "Always")
         container:Add("combat", "In Combat")
-        container:Add("always_combat", "Always (Combat Override)")
+        container:Add("always_combat", "Always (Force in Combat)")
         return container:GetData()
       end
 
@@ -790,7 +790,7 @@ local function CreateSettingsPanel()
   local function AddColorModeDropdown()
     local key = "colorMode"
     local name = "Color"
-    local tooltip = "Choose how the ring is coloured. The Default colour is set in Advanced."
+    local tooltip = "Choose how the cursor ring is coloured. The Default colour is set in Advanced."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
@@ -820,7 +820,7 @@ local function CreateSettingsPanel()
   local function AddAggroModeDropdown()
     local key = "aggroMode"
     local name = "Aggro Display"
-    local tooltip = "Highlight the ring when your target is hostile or you have threat."
+    local tooltip = "Highlight the cursor ring when your target is hostile or when you have threat."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -867,7 +867,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "doNotShowWorld",
     "Do Not Show in Open World",
-    "Hides the ring outside instances."
+    "Hide the cursor ring outside instances."
   )
 
   AddInstanceModeDropdown()
@@ -875,13 +875,13 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "doNotShowHousing",
     "Do Not Show in Player Housing",
-    "Hide the cursor ring while in player housing."
+    "Hide the cursor ring in player housing."
   )
 
   AddCheckbox(
     "hideInMenus",
     "Do Not Show in Menus",
-    "Hide the cursor ring while menus are open."
+    "Hide the cursor ring while game menus are open."
   )
 
   AddMouselookModeDropdown()
@@ -889,7 +889,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "showGCDSpinner",
     "Global Cooldown",
-    "Display a global cooldown animation."
+    "Show a global cooldown animation on the cursor ring."
   )
 
   AddStyleDropdown()
