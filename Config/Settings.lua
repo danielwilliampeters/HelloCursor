@@ -576,7 +576,7 @@ local function CreateSettingsPanel()
   local function AddSizeDropdown()
     local key = "size"
     local name = "Size"
-    local tooltip = "Adjust the size of the cursor ring."
+    local tooltip = "Adjusts the size of the cursor ring."
 
     local defaultValue = DEFAULTS[key] or "standard"
 
@@ -610,7 +610,7 @@ local function CreateSettingsPanel()
   local function AddStyleDropdown()
     local key = "classicRingStyle"
     local name = "Style"
-    local tooltip = "Choose the cursor ring style."
+    local tooltip = "Controls the appearance of the cursor ring."
 
     local defaultValue = DEFAULTS[key] and true or false
 
@@ -634,7 +634,7 @@ local function CreateSettingsPanel()
   local function AddInstanceModeDropdown()
     local key = "instanceHideMode"
     local name = "Do Not Show Inside Instances"
-    local tooltip = "Choose which types of instances hide the cursor ring."
+    local tooltip = "Hide the cursor ring inside instances."
 
     local defaultValue = DeriveInstanceHideModeFromFlags(
       DEFAULTS.doNotShowPvE,
@@ -689,7 +689,7 @@ local function CreateSettingsPanel()
   local function AddMouselookModeDropdown()
     local key = "mouselookMode"
     local name = "Mouselook Behaviour"
-    local tooltip = "Choose how the cursor ring behaves while mouselooking."
+    local tooltip = "Controls how the cursor ring behaves while mouselooking."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -720,7 +720,7 @@ local function CreateSettingsPanel()
   local function AddShowRingModeDropdown()
     local key = "showRingMode"
     local name = "Show Cursor Ring"
-    local tooltip = "Choose when the cursor ring is shown. 'Always' and 'In Combat' can still be hidden by Do Not Show rules. 'Always (Force in Combat)' overrides those rules while in combat."
+    local tooltip = "Controls when the cursor ring is shown.\n\nAlways: Always visible.\nIn Combat: Only shown in combat.\nAlways (Force in Combat): Always visible and ignores Do Not Show rules while in combat."
 
     -- Derive the dropdown's default from the canonical defaults so
     -- the Blizzard "Defaults" button matches the addon defaults.
@@ -790,7 +790,7 @@ local function CreateSettingsPanel()
   local function AddColorModeDropdown()
     local key = "colorMode"
     local name = "Color"
-    local tooltip = "Choose how the cursor ring is coloured. The Default colour is set in Advanced."
+    local tooltip = "Controls how the cursor ring is coloured.\n\nDefault colour is set in Advanced."
 
     local defaultValue = DEFAULTS[key] or "default"
     local current = HelloCursorDB[key]
@@ -820,7 +820,7 @@ local function CreateSettingsPanel()
   local function AddAggroModeDropdown()
     local key = "aggroMode"
     local name = "Aggro Display"
-    local tooltip = "Highlight the cursor ring when your target is hostile or when you have threat."
+    local tooltip = "Highlights the cursor ring when your target is hostile or when you have threat."
 
     local defaultValue = DEFAULTS[key] or "none"
     local current = HelloCursorDB[key]
@@ -867,7 +867,7 @@ local function CreateSettingsPanel()
   AddCheckbox(
     "doNotShowWorld",
     "Do Not Show in Open World",
-    "Hide the cursor ring outside instances."
+    "Hide the cursor ring while in the open world."
   )
 
   AddInstanceModeDropdown()
