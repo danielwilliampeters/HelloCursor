@@ -714,31 +714,48 @@ local function ComputeReactionTint()
 
   return c.r, c.g, c.b, 1, ("reaction:%d"):format(reaction)
 end
-local function GetThreatLevelForTint()
-  if not (UnitExists and UnitThreatSituation) then return nil end
-  if not UnitExists("target") then return nil end
 
-  -- Only care about live, attackable targets for threat-based tint.
+local function GetThreatLevelForTint()
+
+  -- Hard guard: must have a valid target
+  if not UnitExists or not UnitExists("target") then
+    return nil
+  end
+
+  -- Skip players entirely (PvP safe)
+  if UnitIsPlayer and UnitIsPlayer("target") then
+    return nil
+  end
+
+  -- Only care about attackable targets
   if UnitCanAttack and not UnitCanAttack("player", "target") then
     return nil
   end
+
+  -- Skip dead targets
   if UnitIsDeadOrGhost and UnitIsDeadOrGhost("target") then
     return nil
   end
 
-  local threatLevel = UnitThreatSituation("player", "target")
-  if threatLevel and threatLevel > 0 then
-    return threatLevel
+  -- Threat API (safe numeric check only)
+  if UnitThreatSituation then
+    local threatLevel = UnitThreatSituation("player", "target")
+
+    if type(threatLevel) == "number" and threatLevel > 0 then
+      return threatLevel
+    end
   end
 
-  -- Fallback: some mechanics (fixates, scripted target swaps) can
-  -- directly target the player without updating the standard threat
-  -- table in a way that UnitThreatSituation reports > 0. In those
-  -- cases we still want the "Threat" aggro mode to react when the
-  -- enemy is actually targeting you.
-  if UnitExists("targettarget") and UnitIsUnit and UnitIsUnit("targettarget", "player") then
-    -- Treat this as a high-threat state for tinting purposes.
-    return 3
+  -- SAFE fallback (NO boolean comparison)
+  if UnitExists and UnitExists("targettarget") then
+    if UnitIsUnit then
+      local isTargetingPlayer = UnitIsUnit("targettarget", "player")
+
+      -- DO NOT compare this boolean — just check type
+      if type(isTargetingPlayer) == "boolean" and isTargetingPlayer then
+        return 3
+      end
+    end
   end
 
   return nil
