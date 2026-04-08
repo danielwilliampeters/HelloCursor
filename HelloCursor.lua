@@ -746,18 +746,6 @@ local function GetThreatLevelForTint()
     end
   end
 
-  -- SAFE fallback (NO boolean comparison)
-  if UnitExists and UnitExists("targettarget") then
-    if UnitIsUnit then
-      local isTargetingPlayer = UnitIsUnit("targettarget", "player")
-
-      -- DO NOT compare this boolean — just check type
-      if type(isTargetingPlayer) == "boolean" and isTargetingPlayer then
-        return 3
-      end
-    end
-  end
-
   return nil
 end
 
