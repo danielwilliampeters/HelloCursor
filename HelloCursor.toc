@@ -1,8 +1,8 @@
-## Interface: 120000
+## Interface: 120100`
 ## Title: Hello Cursor
 ## Notes: Adds a configurable ring around the cursor. /hc
 ## Author: Daniel Peters
-## Version: 18
+## Version: 19
 ## SavedVariables: HelloCursorDB
 ## Category: User Interface
 ## IconTexture: Interface\AddOns\HelloCursor\Assets\Icons\icon.tga
